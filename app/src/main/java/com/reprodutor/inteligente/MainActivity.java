@@ -145,7 +145,10 @@ public class MainActivity extends Activity {
         playerCard.addView(controls);
         page.addView(playerCard);
 
-        TextView scheduleTitle = label("PROGRAMAÇÕES", 12, MUTED, true);
+        TextView manualTitle = label("CONTROLE MANUAL", 12, MUTED, true);
+        manualTitle.setPadding(0, dp(22), 0, dp(10));
+        page.addView(manualTitle);
+        TextView scheduleTitle = label("PROGRAMAÇÕES AUTOMÁTICAS", 12, MUTED, true);
         scheduleTitle.setPadding(0, dp(25), 0, dp(10));
         page.addView(scheduleTitle);
         TextView scheduleInfo = label("Configure os horários e os ciclos de áudio.", 13, WHITE, false);
@@ -154,9 +157,9 @@ public class MainActivity extends Activity {
         page.addView(scheduleInfo);
 
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-        configButtons[0] = makeButton("◷  HORÁRIO PARA LIGAR: " + prefs.getString("inicio", "Não definido"), WHITE, BG,
+        configButtons[0] = makeButton("◷  HORÁRIO PARA LIGAR: " + displayAmPm(prefs.getString("inicio", "Não definido")), WHITE, BG,
                 v -> chooseTime("inicio", "Horário para ligar", configButtons[0]));
-        configButtons[1] = makeButton("◷  HORÁRIO PARA DESLIGAR: " + prefs.getString("fim", "Não definido"), WHITE, BG,
+        configButtons[1] = makeButton("◷  HORÁRIO PARA DESLIGAR: " + displayAmPm(prefs.getString("fim", "Não definido")), WHITE, BG,
                 v -> chooseTime("fim", "Horário para desligar", configButtons[1]));
         configButtons[2] = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
                 v -> chooseMinutes("tocando", "Tempo tocando (minutos)", configButtons[2]));
@@ -168,6 +171,9 @@ public class MainActivity extends Activity {
             configParams.topMargin = dp(8);
             page.addView(b, configParams);
         }
+        TextView autoTitle = label("CONTROLE AUTOMÁTICO", 12, MUTED, true);
+        autoTitle.setPadding(0, dp(22), 0, dp(4));
+        page.addView(autoTitle);
         cycleButton = makeButton("▶  INICIAR CICLO AUTOMÁTICO", WHITE, BG, v -> toggleCycle());
         LinearLayout.LayoutParams cycleParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
@@ -181,6 +187,19 @@ public class MainActivity extends Activity {
         setContentView(scroll);
     }
 
+    private String displayAmPm(String value) {
+        if (value == null || value.equals("Não definido")) return value;
+        try {
+            String[] parts = value.split(":");
+            int hour = Integer.parseInt(parts[0]);
+            int minute = Integer.parseInt(parts[1]);
+            String suffix = hour < 12 ? "AM" : "PM";
+            int hour12 = hour % 12;
+            if (hour12 == 0) hour12 = 12;
+            return String.format(Locale.US, "%02d:%02d %s", hour12, minute, suffix);
+        } catch (Exception e) { return value; }
+    }
+
     private void chooseTime(String key, String title, Button target) {
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
         String current = prefs.getString(key, "08:00");
@@ -192,8 +211,8 @@ public class MainActivity extends Activity {
             String value = String.format(Locale.getDefault(), "%02d:%02d", h, m);
             prefs.edit().putString(key, value).apply();
             String prefix = key.equals("inicio") ? "◷  HORÁRIO PARA LIGAR: " : "◷  HORÁRIO PARA DESLIGAR: ";
-            target.setText(prefix + value);
-        }, hour, minute, true).show();
+            target.setText(prefix + displayAmPm(value));
+        }, hour, minute, false).show();
     }
 
     private void chooseMinutes(String key, String title, Button target) {
@@ -327,6 +346,10 @@ public class MainActivity extends Activity {
     }
 
     private void playAudio() {
+        if (cycleActive) {
+            stopCycle();
+            status.setText("Modo manual");
+        }
         if (player == null) {
             Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
             return;
@@ -336,6 +359,10 @@ public class MainActivity extends Activity {
     }
 
     private void pauseAudio() {
+        if (cycleActive) {
+            stopCycle();
+            status.setText("Modo manual");
+        }
         if (player != null && player.isPlaying()) {
             player.pause();
             status.setText("Áudio pausado");
