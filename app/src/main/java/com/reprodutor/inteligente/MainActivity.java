@@ -177,8 +177,12 @@ public class MainActivity extends Activity {
         scheduleHeader.setGravity(Gravity.CENTER_VERTICAL);
         TextView scheduleInfo = label("Configure até 4 horários de funcionamento.", 13, WHITE, false);
         scheduleHeader.addView(scheduleInfo, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        Button resetSchedules = makeButton("⚙", WHITE, BG, v -> confirmResetSchedules());
-        scheduleHeader.addView(resetSchedules, new LinearLayout.LayoutParams(dp(54), dp(48)));
+        Button resetSchedules = makeButton("↻", Color.TRANSPARENT, WHITE, v -> confirmResetSchedules());
+        resetSchedules.setTextSize(29);
+        resetSchedules.setBackgroundColor(Color.TRANSPARENT);
+        resetSchedules.setElevation(0);
+        resetSchedules.setPadding(0, 0, 0, 0);
+        scheduleHeader.addView(resetSchedules, new LinearLayout.LayoutParams(dp(48), dp(48)));
         page.addView(scheduleHeader);
 
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
