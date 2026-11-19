@@ -109,15 +109,13 @@ public class MainActivity extends Activity {
         playerCard.addView(controls);
         page.addView(playerCard);
 
-        TextView voiceTitle = label("CONTROLE POR VOZ", 12, MUTED, true);
-        voiceTitle.setPadding(0, dp(25), 0, dp(10));
-        page.addView(voiceTitle);
-        Button voice = makeButton("🎙   FALAR COMANDO", Color.rgb(25, 48, 35), GREEN, v -> startSpeech());
-        page.addView(voice, match());
-        TextView help = label("Diga: reproduzir, pausar, parar ou escolher áudio.", 12, MUTED, false);
-        help.setGravity(Gravity.CENTER);
-        help.setPadding(dp(8), dp(15), dp(8), 0);
-        page.addView(help);
+        TextView scheduleTitle = label("PROGRAMAÇÕES", 12, MUTED, true);
+        scheduleTitle.setPadding(0, dp(25), 0, dp(10));
+        page.addView(scheduleTitle);
+        TextView scheduleInfo = label("Horários de ligar e desligar, duração tocando e intervalo de pausa.", 13, WHITE, false);
+        scheduleInfo.setPadding(dp(16), dp(16), dp(16), dp(16));
+        scheduleInfo.setBackground(round(PANEL, 16));
+        page.addView(scheduleInfo);
 
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
