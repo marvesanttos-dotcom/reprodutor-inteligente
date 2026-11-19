@@ -115,8 +115,8 @@ public class MainActivity extends Activity {
         LinearLayout brandText = new LinearLayout(this);
         brandText.setOrientation(LinearLayout.VERTICAL);
         brandText.setPadding(dp(14), 0, 0, 0);
-        TextView title = label("REPRODUTOR", 19, GREEN, true);
-        TextView sub = label("INTELIGENTE  •  CANTOS", 11, MUTED, true);
+        TextView title = label("PÁSSARO", 19, GREEN, true);
+        TextView sub = label("PROFESSOR  •  CANTOS", 11, MUTED, true);
         brandText.addView(title);
         brandText.addView(sub);
         brand.addView(brandText);
