@@ -12,6 +12,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import java.util.Calendar;
 import android.speech.RecognizerIntent;
 import android.view.Gravity;
 import android.view.View;
@@ -32,31 +34,50 @@ public class MainActivity extends Activity {
     private boolean playerReady = false;
     private boolean cycleActive = false;
     private boolean cyclePlaying = false;
+    private boolean scheduleWindowActive = false;
+    private long nextCycleChangeAt = 0L;
     private Button cycleButton;
-    private final Runnable cycleStep = new Runnable() {
+    private final Runnable scheduleTick = new Runnable() {
         @Override public void run() {
-            if (!cycleActive || player == null || !playerReady) return;
+            if (!cycleActive) return;
+            if (player == null || !playerReady) { stopCycle(); return; }
+            boolean inside = isWithinAnySchedule();
+            long now = SystemClock.elapsedRealtime();
             SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-            if (cyclePlaying) {
-                try { if (player.isPlaying()) player.pause(); } catch (Exception ignored) { }
+            if (!inside) {
+                if (player.isPlaying()) { try { player.pause(); } catch (Exception ignored) { } }
                 cyclePlaying = false;
-                status.setText("Ciclo automático: pausa");
-                cycleHandler.postDelayed(this, prefs.getInt("parado", 5) * 60L * 1000L);
-            } else {
+                scheduleWindowActive = false;
+                status.setText("Automático ativo • aguardando próximo horário");
+            } else if (!scheduleWindowActive) {
+                scheduleWindowActive = true;
+                cyclePlaying = true;
                 try {
                     if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
                     player.start();
-                    cyclePlaying = true;
-                    status.setText("Ciclo automático: reproduzindo");
-                    cycleHandler.postDelayed(this, prefs.getInt("tocando", 5) * 60L * 1000L);
-                } catch (Exception e) {
-                    stopCycle();
-                    status.setText("Não foi possível iniciar o ciclo");
+                    nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
+                    status.setText("Programação ativa • reproduzindo");
+                } catch (Exception e) { stopCycle(); status.setText("Não foi possível iniciar o áudio"); return; }
+            } else if (now >= nextCycleChangeAt) {
+                if (cyclePlaying) {
+                    try { if (player.isPlaying()) player.pause(); } catch (Exception ignored) { }
+                    cyclePlaying = false;
+                    nextCycleChangeAt = now + prefs.getInt("parado", 5) * 60L * 1000L;
+                    status.setText("Programação ativa • intervalo de pausa");
+                } else {
+                    try {
+                        if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
+                        player.start();
+                        cyclePlaying = true;
+                        nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
+                        status.setText("Programação ativa • reproduzindo");
+                    } catch (Exception e) { stopCycle(); status.setText("Não foi possível iniciar o áudio"); return; }
                 }
             }
+            cycleHandler.postDelayed(this, 1000L);
         }
     };
-    private final Button[] configButtons = new Button[4];
+    private final Button[] configButtons = new Button[8];
     private TextView status;
     private TextView selectedFile;
     private static final int PICK_AUDIO = 10;
@@ -157,20 +178,31 @@ public class MainActivity extends Activity {
         page.addView(scheduleInfo);
 
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-        configButtons[0] = makeButton("◷  HORÁRIO PARA LIGAR: " + displayAmPm(prefs.getString("inicio", "Não definido")), WHITE, BG,
-                v -> chooseTime("inicio", "Horário para ligar", configButtons[0]));
-        configButtons[1] = makeButton("◷  HORÁRIO PARA DESLIGAR: " + displayAmPm(prefs.getString("fim", "Não definido")), WHITE, BG,
-                v -> chooseTime("fim", "Horário para desligar", configButtons[1]));
-        configButtons[2] = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
-                v -> chooseMinutes("tocando", "Tempo tocando (minutos)", configButtons[2]));
-        configButtons[3] = makeButton("Ⅱ  TEMPO PARADO: " + prefs.getInt("parado", 5) + " MIN", PANEL, WHITE,
-                v -> chooseMinutes("parado", "Tempo parado (minutos)", configButtons[3]));
+        for (int i = 1; i <= 4; i++) {
+            final int slot = i;
+            String startKey = "inicio" + i;
+            String endKey = "fim" + i;
+            String startValue = prefs.getString(startKey, i == 1 ? prefs.getString("inicio", "Não definido") : "Não definido");
+            String endValue = prefs.getString(endKey, i == 1 ? prefs.getString("fim", "Não definido") : "Não definido");
+            configButtons[(i - 1) * 2] = makeButton("PROGRAMAÇÃO " + i + " • LIGA: " + displayAmPm(startValue), WHITE, BG,
+                    v -> chooseTime("inicio" + slot, "Programação " + slot + " • horário para ligar", configButtons[(slot - 1) * 2]));
+            configButtons[(i - 1) * 2 + 1] = makeButton("PROGRAMAÇÃO " + i + " • DESLIGA: " + displayAmPm(endValue), PANEL, WHITE,
+                    v -> chooseTime("fim" + slot, "Programação " + slot + " • horário para desligar", configButtons[(slot - 1) * 2 + 1]));
+        }
         for (Button b : configButtons) {
             LinearLayout.LayoutParams configParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(50));
-            configParams.topMargin = dp(8);
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+            configParams.topMargin = dp(7);
             page.addView(b, configParams);
         }
+        Button playingTime = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("tocando", "Tempo tocando (minutos)", configButtons[0]));
+        page.addView(playingTime, match());
+        Button stoppedTime = makeButton("Ⅱ  TEMPO PARADO: " + prefs.getInt("parado", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("parado", "Tempo parado (minutos)", configButtons[0]));
+        LinearLayout.LayoutParams stoppedParams = match();
+        stoppedParams.topMargin = dp(7);
+        page.addView(stoppedTime, stoppedParams);
         TextView autoTitle = label("CONTROLE AUTOMÁTICO", 12, MUTED, true);
         autoTitle.setPadding(0, dp(22), 0, dp(4));
         page.addView(autoTitle);
@@ -202,7 +234,10 @@ public class MainActivity extends Activity {
 
     private void chooseTime(String key, String title, Button target) {
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-        String current = prefs.getString(key, "08:00");
+        String fallback = key.equals("inicio1") ? prefs.getString("inicio", "08:00") :
+                key.equals("fim1") ? prefs.getString("fim", "08:00") : "08:00";
+        String current = prefs.getString(key, fallback);
+        if (current.equals("Não definido")) current = "08:00";
         String[] parts = current.split(":");
         int hour = 8, minute = 0;
         try { hour = Integer.parseInt(parts[0]); minute = Integer.parseInt(parts[1]); }
@@ -210,7 +245,8 @@ public class MainActivity extends Activity {
         new TimePickerDialog(this, (view, h, m) -> {
             String value = String.format(Locale.getDefault(), "%02d:%02d", h, m);
             prefs.edit().putString(key, value).apply();
-            String prefix = key.equals("inicio") ? "◷  HORÁRIO PARA LIGAR: " : "◷  HORÁRIO PARA DESLIGAR: ";
+            String number = key.substring(key.length() - 1);
+            String prefix = key.startsWith("inicio") ? "PROGRAMAÇÃO " + number + " • LIGA: " : "PROGRAMAÇÃO " + number + " • DESLIGA: ";
             target.setText(prefix + displayAmPm(value));
         }, hour, minute, false).show();
     }
@@ -321,6 +357,27 @@ public class MainActivity extends Activity {
         }
     }
 
+    private boolean isWithinAnySchedule() {
+        Calendar cal = Calendar.getInstance();
+        int current = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
+        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+        for (int i = 1; i <= 4; i++) {
+            String start = prefs.getString("inicio" + i, i == 1 ? prefs.getString("inicio", "Não definido") : "Não definido");
+            String end = prefs.getString("fim" + i, i == 1 ? prefs.getString("fim", "Não definido") : "Não definido");
+            if (start.equals("Não definido") || end.equals("Não definido")) continue;
+            try {
+                String[] a = start.split(":");
+                String[] b = end.split(":");
+                int from = Integer.parseInt(a[0]) * 60 + Integer.parseInt(a[1]);
+                int to = Integer.parseInt(b[0]) * 60 + Integer.parseInt(b[1]);
+                if (from == to) continue;
+                boolean active = from < to ? current >= from && current < to : current >= from || current < to;
+                if (active) return true;
+            } catch (Exception ignored) { }
+        }
+        return false;
+    }
+
     private void toggleCycle() {
         if (cycleActive) {
             stopCycle();
@@ -334,14 +391,18 @@ public class MainActivity extends Activity {
         cycleActive = true;
         cyclePlaying = false;
         cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
-        cycleHandler.removeCallbacks(cycleStep);
-        cycleStep.run();
+        scheduleWindowActive = false;
+        nextCycleChangeAt = 0L;
+        cycleHandler.removeCallbacks(scheduleTick);
+        status.setText("Automático ativo • aguardando programação");
+        scheduleTick.run();
     }
 
     private void stopCycle() {
         cycleActive = false;
         cyclePlaying = false;
-        cycleHandler.removeCallbacks(cycleStep);
+        cycleHandler.removeCallbacks(scheduleTick);
+        scheduleWindowActive = false;
         if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
     }
 
