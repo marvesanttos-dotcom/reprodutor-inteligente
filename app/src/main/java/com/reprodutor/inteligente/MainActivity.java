@@ -12,6 +12,7 @@ import android.view.MotionEvent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
+import android.media.PlaybackParams;
 import android.media.audiofx.Equalizer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -175,7 +176,7 @@ public class MainActivity extends Activity {
         playerCard.addView(controls);
         page.addView(playerCard);
 
-        Button audioSettings = makeButton("♫  AJUSTE DE ÁUDIO • GRAVES E AGUDOS", PANEL, WHITE, v -> showAudioSettings());
+        Button audioSettings = makeButton("♫  TONALIDADE • CANTO MAIS GROSSO OU MAIS FINO", PANEL, WHITE, v -> showAudioSettings());
         LinearLayout.LayoutParams audioSettingsParams = match();
         audioSettingsParams.topMargin = dp(12);
         page.addView(audioSettings, audioSettingsParams);
@@ -386,6 +387,7 @@ public class MainActivity extends Activity {
                 player.setOnPreparedListener(mp -> {
                     playerReady = true;
                     initializeEqualizer(mp.getAudioSessionId());
+                    applyPitch(getSharedPreferences("programacao", MODE_PRIVATE).getInt("tonalidade", 50));
                     status.setText("Áudio carregado. Pronto para reproduzir.");
                     selectedFile.setText("♫  " + uri.getLastPathSegment());
                 });
@@ -569,46 +571,54 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void applyPitch(int tonalidade) {
+        if (player == null || !playerReady) return;
+        try {
+            // 50% mantém o tom original; pitch muda sem alterar a velocidade.
+            float pitch = tonalidade < 50
+                    ? 0.5f + (tonalidade / 50f) * 0.5f
+                    : 1.0f + ((tonalidade - 50) / 50f);
+            PlaybackParams params = new PlaybackParams();
+            params.setSpeed(1.0f);
+            params.setPitch(pitch);
+            player.setPlaybackParams(params);
+        } catch (Exception e) {
+            Toast.makeText(this, "Este aparelho não permite alterar o tom mantendo a velocidade.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void showAudioSettings() {
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(12), dp(12), dp(12), dp(8));
 
-        final int[] values = {prefs.getInt("graves", 50), prefs.getInt("agudos", 50)};
-        LinearLayout dials = new LinearLayout(this);
-        dials.setOrientation(LinearLayout.HORIZONTAL);
-        dials.setGravity(Gravity.CENTER);
-        AudioDial bassDial = new AudioDial(this, "GRAVE", values[0], value -> {
-            values[0] = value;
-            applyEqualizer(values[0], values[1]);
+        final int[] value = {prefs.getInt("tonalidade", 50)};
+        AudioDial pitchDial = new AudioDial(this, "TONALIDADE", value[0], next -> {
+            value[0] = next;
+            applyPitch(next);
         });
-        AudioDial trebleDial = new AudioDial(this, "AGUDO", values[1], value -> {
-            values[1] = value;
-            applyEqualizer(values[0], values[1]);
-        });
-        LinearLayout.LayoutParams dialParams = new LinearLayout.LayoutParams(0, dp(158), 1f);
-        dials.addView(bassDial, dialParams);
-        dials.addView(trebleDial, new LinearLayout.LayoutParams(0, dp(158), 1f));
-        content.addView(dials);
+        content.addView(pitchDial, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(170)));
 
-        TextView hint = label("Gire cada botão redondo para aumentar ou diminuir. 50% é neutro.", 12, MUTED, false);
+        TextView hint = label("Grosso  ←  50% original  →  Fino. A velocidade permanece normal.", 12, MUTED, false);
         hint.setGravity(Gravity.CENTER);
         hint.setPadding(0, dp(8), 0, 0);
         content.addView(hint);
 
-        new AlertDialog.Builder(this).setTitle("Ajuste de áudio")
+        new AlertDialog.Builder(this).setTitle("Tonalidade do canto")
                 .setView(content)
                 .setNegativeButton("Cancelar", (dialog, which) ->
-                        applyEqualizer(prefs.getInt("graves", 50), prefs.getInt("agudos", 50)))
+                        applyPitch(prefs.getInt("tonalidade", 50)))
                 .setNeutralButton("Padrão", (dialog, which) -> {
-                    prefs.edit().putInt("graves", 50).putInt("agudos", 50).apply();
-                    applyEqualizer(50, 50);
+                    value[0] = 50;
+                    prefs.edit().putInt("tonalidade", 50).apply();
+                    applyPitch(50);
                 })
                 .setPositiveButton("Salvar", (dialog, which) -> {
-                    prefs.edit().putInt("graves", values[0]).putInt("agudos", values[1]).apply();
-                    applyEqualizer(values[0], values[1]);
-                    Toast.makeText(this, "Ajustes de áudio salvos", Toast.LENGTH_SHORT).show();
+                    prefs.edit().putInt("tonalidade", value[0]).apply();
+                    applyPitch(value[0]);
+                    Toast.makeText(this, "Tonalidade salva", Toast.LENGTH_SHORT).show();
                 }).show();
     }
 
