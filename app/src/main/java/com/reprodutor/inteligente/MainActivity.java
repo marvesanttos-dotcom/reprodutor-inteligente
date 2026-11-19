@@ -1,6 +1,8 @@
 package com.reprodutor.inteligente;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -12,16 +14,19 @@ import android.speech.RecognizerIntent;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.content.SharedPreferences;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
     private MediaPlayer player;
+    private final Button[] configButtons = new Button[4];
     private TextView status;
     private TextView selectedFile;
     private static final int PICK_AUDIO = 10;
@@ -113,16 +118,69 @@ public class MainActivity extends Activity {
         TextView scheduleTitle = label("PROGRAMAÇÕES", 12, MUTED, true);
         scheduleTitle.setPadding(0, dp(25), 0, dp(10));
         page.addView(scheduleTitle);
-        TextView scheduleInfo = label("Horários de ligar e desligar, duração tocando e intervalo de pausa.", 13, WHITE, false);
+        TextView scheduleInfo = label("Configure os horários e os ciclos de áudio.", 13, WHITE, false);
         scheduleInfo.setPadding(dp(16), dp(16), dp(16), dp(16));
         scheduleInfo.setBackground(round(PANEL, 16));
         page.addView(scheduleInfo);
+
+        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+        configButtons[0] = makeButton("◷  HORÁRIO PARA LIGAR: " + prefs.getString("inicio", "Não definido"), WHITE, BG,
+                v -> chooseTime("inicio", "Horário para ligar", configButtons[0]));
+        configButtons[1] = makeButton("◷  HORÁRIO PARA DESLIGAR: " + prefs.getString("fim", "Não definido"), WHITE, BG,
+                v -> chooseTime("fim", "Horário para desligar", configButtons[1]));
+        configButtons[2] = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("tocando", "Tempo tocando (minutos)", configButtons[2]));
+        configButtons[3] = makeButton("Ⅱ  TEMPO PARADO: " + prefs.getInt("parado", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("parado", "Tempo parado (minutos)", configButtons[3]));
+        for (Button b : configButtons) {
+            LinearLayout.LayoutParams configParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(50));
+            configParams.topMargin = dp(8);
+            page.addView(b, configParams);
+        }
 
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(28), 0, 0);
         page.addView(footer);
         setContentView(scroll);
+    }
+
+    private void chooseTime(String key, String title, Button target) {
+        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+        String current = prefs.getString(key, "08:00");
+        String[] parts = current.split(":");
+        int hour = 8, minute = 0;
+        try { hour = Integer.parseInt(parts[0]); minute = Integer.parseInt(parts[1]); }
+        catch (Exception ignored) { }
+        new TimePickerDialog(this, (view, h, m) -> {
+            String value = String.format(Locale.getDefault(), "%02d:%02d", h, m);
+            prefs.edit().putString(key, value).apply();
+            String prefix = key.equals("inicio") ? "◷  HORÁRIO PARA LIGAR: " : "◷  HORÁRIO PARA DESLIGAR: ";
+            target.setText(prefix + value);
+        }, hour, minute, true).show();
+    }
+
+    private void chooseMinutes(String key, String title, Button target) {
+        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+        EditText input = new EditText(this);
+        input.setInputType(2);
+        input.setSingleLine(true);
+        input.setHint("Minutos");
+        input.setText(String.valueOf(prefs.getInt(key, 5)));
+        new AlertDialog.Builder(this).setTitle(title).setView(input)
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Salvar", (dialog, which) -> {
+                    try {
+                        int value = Integer.parseInt(input.getText().toString().trim());
+                        if (value < 1 || value > 1440) throw new NumberFormatException();
+                        prefs.edit().putInt(key, value).apply();
+                        String prefix = key.equals("tocando") ? "▶  TEMPO TOCANDO: " : "Ⅱ  TEMPO PARADO: ";
+                        target.setText(prefix + value + " MIN");
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Digite um valor entre 1 e 1440 minutos", Toast.LENGTH_SHORT).show();
+                    }
+                }).show();
     }
 
     private int dp(int value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
