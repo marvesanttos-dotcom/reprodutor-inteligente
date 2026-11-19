@@ -53,7 +53,8 @@ public class MainActivity extends Activity {
         logo.setText("🐦");
         logo.setTextSize(29);
         logo.setGravity(Gravity.CENTER);
-        logo.setTextColor(Color.BLACK);\n        logo.setBackground(round(Color.WHITE, 100));
+        logo.setTextColor(Color.BLACK);
+        logo.setBackground(round(Color.WHITE, 100));
         brand.addView(logo, new LinearLayout.LayoutParams(dp(58), dp(58)));
         LinearLayout brandText = new LinearLayout(this);
         brandText.setOrientation(LinearLayout.VERTICAL);
