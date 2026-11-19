@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
+import android.media.audiofx.Equalizer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -21,6 +22,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.content.SharedPreferences;
@@ -30,6 +32,9 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private MediaPlayer player;
+    private Equalizer equalizer;
+    private short equalizerMin = -1500;
+    private short equalizerMax = 1500;
     private final Handler cycleHandler = new Handler(Looper.getMainLooper());
     private boolean playerReady = false;
     private boolean cycleActive = false;
@@ -165,6 +170,11 @@ public class MainActivity extends Activity {
         controls.addView(pause, side2);
         playerCard.addView(controls);
         page.addView(playerCard);
+
+        Button audioSettings = makeButton("♫  AJUSTE DE ÁUDIO • GRAVES E AGUDOS", PANEL, WHITE, v -> showAudioSettings());
+        LinearLayout.LayoutParams audioSettingsParams = match();
+        audioSettingsParams.topMargin = dp(12);
+        page.addView(audioSettings, audioSettingsParams);
 
         TextView manualTitle = label("CONTROLE MANUAL", 12, MUTED, true);
         manualTitle.setPadding(0, dp(22), 0, dp(10));
@@ -364,12 +374,14 @@ public class MainActivity extends Activity {
                 try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                 catch (Exception ignored) { }
                 stopCycle();
+                releaseEqualizer();
                 releasePlayer();
                 playerReady = false;
                 player = new MediaPlayer();
                 player.setDataSource(this, uri);
                 player.setOnPreparedListener(mp -> {
                     playerReady = true;
+                    initializeEqualizer(mp.getAudioSessionId());
                     status.setText("Áudio carregado. Pronto para reproduzir.");
                     selectedFile.setText("♫  " + uri.getLastPathSegment());
                 });
@@ -503,6 +515,88 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void initializeEqualizer(int audioSessionId) {
+        releaseEqualizer();
+        try {
+            equalizer = new Equalizer(0, audioSessionId);
+            equalizer.setEnabled(true);
+            equalizerMin = equalizer.getBandLevelRange()[0];
+            equalizerMax = equalizer.getBandLevelRange()[1];
+            SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+            applyEqualizer(prefs.getInt("graves", 50), prefs.getInt("agudos", 50));
+        } catch (Exception e) {
+            releaseEqualizer();
+            status.setText("Áudio carregado • equalizador indisponível neste aparelho");
+        }
+    }
+
+    private void applyEqualizer(int bass, int treble) {
+        if (equalizer == null) return;
+        try {
+            short bands = equalizer.getNumberOfBands();
+            if (bands < 1) return;
+            short lowBand = 0;
+            short highBand = (short) (bands - 1);
+            short lowLevel = (short) (equalizerMin + (equalizerMax - equalizerMin) * bass / 100);
+            short highLevel = (short) (equalizerMin + (equalizerMax - equalizerMin) * treble / 100);
+            equalizer.setBandLevel(lowBand, lowLevel);
+            if (highBand != lowBand) equalizer.setBandLevel(highBand, highLevel);
+        } catch (Exception ignored) { }
+    }
+
+    private void releaseEqualizer() {
+        if (equalizer != null) {
+            try { equalizer.setEnabled(false); } catch (Exception ignored) { }
+            try { equalizer.release(); } catch (Exception ignored) { }
+            equalizer = null;
+        }
+    }
+
+    private void showAudioSettings() {
+        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(22), dp(8), dp(22), dp(8));
+        TextView bassLabel = label("GRAVES", 13, WHITE, true);
+        TextView bassValue = label(prefs.getInt("graves", 50) + "%", 12, MUTED, false);
+        SeekBar bassBar = new SeekBar(this);
+        bassBar.setMax(100);
+        bassBar.setProgress(prefs.getInt("graves", 50));
+        bassBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { bassValue.setText(value + "%"); }
+            public void onStartTrackingTouch(SeekBar seekBar) { }
+            public void onStopTrackingTouch(SeekBar seekBar) { }
+        });
+        TextView trebleLabel = label("AGUDOS", 13, WHITE, true);
+        trebleLabel.setPadding(0, dp(18), 0, 0);
+        TextView trebleValue = label(prefs.getInt("agudos", 50) + "%", 12, MUTED, false);
+        SeekBar trebleBar = new SeekBar(this);
+        trebleBar.setMax(100);
+        trebleBar.setProgress(prefs.getInt("agudos", 50));
+        trebleBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { trebleValue.setText(value + "%"); }
+            public void onStartTrackingTouch(SeekBar seekBar) { }
+            public void onStopTrackingTouch(SeekBar seekBar) { }
+        });
+        TextView hint = label("50% mantém o som original. Ajuste aos poucos para evitar distorção.", 12, MUTED, false);
+        hint.setPadding(0, dp(16), 0, 0);
+        content.addView(bassLabel); content.addView(bassValue); content.addView(bassBar);
+        content.addView(trebleLabel); content.addView(trebleValue); content.addView(trebleBar); content.addView(hint);
+        new AlertDialog.Builder(this).setTitle("Qualidade do áudio").setView(content)
+                .setNegativeButton("Cancelar", null)
+                .setNeutralButton("Padrão", (dialog, which) -> {
+                    prefs.edit().putInt("graves", 50).putInt("agudos", 50).apply();
+                    applyEqualizer(50, 50);
+                })
+                .setPositiveButton("Salvar", (dialog, which) -> {
+                    int bass = bassBar.getProgress();
+                    int treble = trebleBar.getProgress();
+                    prefs.edit().putInt("graves", bass).putInt("agudos", treble).apply();
+                    applyEqualizer(bass, treble);
+                    Toast.makeText(this, "Ajustes de áudio salvos", Toast.LENGTH_SHORT).show();
+                }).show();
+    }
+
     private void releasePlayer() {
         playerReady = false;
         if (player != null) {
@@ -515,6 +609,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         stopCycle();
+        releaseEqualizer();
         releasePlayer();
         super.onDestroy();
     }
