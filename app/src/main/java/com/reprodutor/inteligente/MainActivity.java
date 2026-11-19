@@ -85,7 +85,7 @@ public class MainActivity extends Activity {
         brand.setGravity(Gravity.CENTER_VERTICAL);
         brand.setOrientation(LinearLayout.HORIZONTAL);
         TextView logo = new TextView(this);
-        logo.setText("🐦");
+        logo.setText("🎶");
         logo.setTextSize(29);
         logo.setGravity(Gravity.CENTER);
         logo.setTextColor(Color.BLACK);
