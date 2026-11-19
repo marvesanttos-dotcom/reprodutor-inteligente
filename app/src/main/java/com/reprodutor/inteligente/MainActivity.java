@@ -172,10 +172,14 @@ public class MainActivity extends Activity {
         TextView scheduleTitle = label("PROGRAMAÇÕES AUTOMÁTICAS", 12, MUTED, true);
         scheduleTitle.setPadding(0, dp(25), 0, dp(10));
         page.addView(scheduleTitle);
-        TextView scheduleInfo = label("Configure os horários e os ciclos de áudio.", 13, WHITE, false);
-        scheduleInfo.setPadding(dp(16), dp(16), dp(16), dp(16));
-        scheduleInfo.setBackground(round(PANEL, 16));
-        page.addView(scheduleInfo);
+        LinearLayout scheduleHeader = new LinearLayout(this);
+        scheduleHeader.setOrientation(LinearLayout.HORIZONTAL);
+        scheduleHeader.setGravity(Gravity.CENTER_VERTICAL);
+        TextView scheduleInfo = label("Configure até 4 horários de funcionamento.", 13, WHITE, false);
+        scheduleHeader.addView(scheduleInfo, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        Button resetSchedules = makeButton("⚙", WHITE, BG, v -> confirmResetSchedules());
+        scheduleHeader.addView(resetSchedules, new LinearLayout.LayoutParams(dp(54), dp(48)));
+        page.addView(scheduleHeader);
 
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
         for (int i = 1; i <= 4; i++) {
@@ -230,6 +234,36 @@ public class MainActivity extends Activity {
             if (hour12 == 0) hour12 = 12;
             return String.format(Locale.US, "%02d:%02d %s", hour12, minute, suffix);
         } catch (Exception e) { return value; }
+    }
+
+    private void confirmResetSchedules() {
+        new AlertDialog.Builder(this)
+                .setTitle("Zerar programações?")
+                .setMessage("Isso apagará os horários de ligar e desligar das quatro programações. Os tempos tocando e parado serão mantidos.")
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Zerar", (dialog, which) -> {
+                    SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+                    SharedPreferences.Editor editor = prefs.edit();
+                    for (int i = 1; i <= 4; i++) {
+                        editor.remove("inicio" + i);
+                        editor.remove("fim" + i);
+                    }
+                    editor.remove("inicio");
+                    editor.remove("fim");
+                    editor.apply();
+                    for (int i = 0; i < 8; i++) {
+                        int slot = i / 2 + 1;
+                        String label = i % 2 == 0
+                                ? "PROGRAMAÇÃO " + slot + " • LIGA: Não definido"
+                                : "PROGRAMAÇÃO " + slot + " • DESLIGA: Não definido";
+                        configButtons[i].setText(label);
+                    }
+                    if (cycleActive) {
+                        stopCycle();
+                        status.setText("Programações zeradas • automático parado");
+                    }
+                    Toast.makeText(this, "Horários apagados", Toast.LENGTH_SHORT).show();
+                }).show();
     }
 
     private void chooseTime(String key, String title, Button target) {
