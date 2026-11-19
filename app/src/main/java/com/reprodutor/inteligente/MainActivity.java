@@ -5,6 +5,10 @@ import android.app.AlertDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.view.MotionEvent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
@@ -560,45 +564,121 @@ public class MainActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(22), dp(8), dp(22), dp(8));
-        TextView bassLabel = label("GRAVES", 13, WHITE, true);
-        TextView bassValue = label(prefs.getInt("graves", 50) + "%", 12, MUTED, false);
-        SeekBar bassBar = new SeekBar(this);
-        bassBar.setMax(100);
-        bassBar.setProgress(prefs.getInt("graves", 50));
-        bassBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { bassValue.setText(value + "%"); if (fromUser) applyEqualizer(value, 50); }
-            public void onStartTrackingTouch(SeekBar seekBar) { }
-            public void onStopTrackingTouch(SeekBar seekBar) { }
+        content.setPadding(dp(12), dp(12), dp(12), dp(8));
+
+        final int[] values = {prefs.getInt("graves", 50), prefs.getInt("agudos", 50)};
+        LinearLayout dials = new LinearLayout(this);
+        dials.setOrientation(LinearLayout.HORIZONTAL);
+        dials.setGravity(Gravity.CENTER);
+        AudioDial bassDial = new AudioDial(this, "GRAVE", values[0], value -> {
+            values[0] = value;
+            applyEqualizer(values[0], values[1]);
         });
-        TextView trebleLabel = label("AGUDOS", 13, WHITE, true);
-        trebleLabel.setPadding(0, dp(18), 0, 0);
-        TextView trebleValue = label(prefs.getInt("agudos", 50) + "%", 12, MUTED, false);
-        SeekBar trebleBar = new SeekBar(this);
-        trebleBar.setMax(100);
-        trebleBar.setProgress(prefs.getInt("agudos", 50));
-        trebleBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { trebleValue.setText(value + "%"); if (fromUser) applyEqualizer(bassBar.getProgress(), value); }
-            public void onStartTrackingTouch(SeekBar seekBar) { }
-            public void onStopTrackingTouch(SeekBar seekBar) { }
+        AudioDial trebleDial = new AudioDial(this, "AGUDO", values[1], value -> {
+            values[1] = value;
+            applyEqualizer(values[0], values[1]);
         });
-        TextView hint = label("50% é neutro; abaixo reduz e acima aumenta. Teste com o áudio tocando.", 12, MUTED, false);
-        hint.setPadding(0, dp(16), 0, 0);
-        content.addView(bassLabel); content.addView(bassValue); content.addView(bassBar);
-        content.addView(trebleLabel); content.addView(trebleValue); content.addView(trebleBar); content.addView(hint);
-        new AlertDialog.Builder(this).setTitle("Qualidade do áudio").setView(content)
-                .setNegativeButton("Cancelar", null)
+        LinearLayout.LayoutParams dialParams = new LinearLayout.LayoutParams(0, dp(158), 1f);
+        dials.addView(bassDial, dialParams);
+        dials.addView(trebleDial, new LinearLayout.LayoutParams(0, dp(158), 1f));
+        content.addView(dials);
+
+        TextView hint = label("Gire cada botão redondo para aumentar ou diminuir. 50% é neutro.", 12, MUTED, false);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(0, dp(8), 0, 0);
+        content.addView(hint);
+
+        new AlertDialog.Builder(this).setTitle("Ajuste de áudio")
+                .setView(content)
+                .setNegativeButton("Cancelar", (dialog, which) ->
+                        applyEqualizer(prefs.getInt("graves", 50), prefs.getInt("agudos", 50)))
                 .setNeutralButton("Padrão", (dialog, which) -> {
                     prefs.edit().putInt("graves", 50).putInt("agudos", 50).apply();
                     applyEqualizer(50, 50);
                 })
                 .setPositiveButton("Salvar", (dialog, which) -> {
-                    int bass = bassBar.getProgress();
-                    int treble = trebleBar.getProgress();
-                    prefs.edit().putInt("graves", bass).putInt("agudos", treble).apply();
-                    applyEqualizer(bass, treble);
+                    prefs.edit().putInt("graves", values[0]).putInt("agudos", values[1]).apply();
+                    applyEqualizer(values[0], values[1]);
                     Toast.makeText(this, "Ajustes de áudio salvos", Toast.LENGTH_SHORT).show();
                 }).show();
+    }
+
+    private interface DialChangeListener {
+        void onChanged(int value);
+    }
+
+    private class AudioDial extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF arc = new RectF();
+        private final String title;
+        private final DialChangeListener listener;
+        private int value;
+        private float downAngle;
+        private int startValue;
+
+        AudioDial(Activity context, String title, int initialValue, DialChangeListener listener) {
+            super(context);
+            this.title = title;
+            this.value = Math.max(0, Math.min(100, initialValue));
+            this.listener = listener;
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float cx = getWidth() / 2f;
+            float cy = dp(88);
+            float radius = dp(43);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(7));
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setColor(0xFF333333);
+            arc.set(cx - radius, cy - radius, cx + radius, cy + radius);
+            canvas.drawArc(arc, 135, 270, false, paint);
+            paint.setColor(Color.WHITE);
+            canvas.drawArc(arc, 135, 270f * value / 100f, false, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFF202020);
+            canvas.drawCircle(cx, cy, dp(34), paint);
+            double angle = Math.toRadians(135 + 270f * value / 100f);
+            float nx = cx + (float)Math.cos(angle) * dp(27);
+            float ny = cy + (float)Math.sin(angle) * dp(27);
+            paint.setColor(Color.WHITE);
+            canvas.drawCircle(nx, ny, dp(4), paint);
+
+            paint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(dp(18));
+            canvas.drawText(value + "%", cx, cy + dp(6), paint);
+            paint.setTextSize(dp(12));
+            paint.setColor(Color.WHITE);
+            canvas.drawText(title, cx, dp(153), paint);
+        }
+
+        @Override public boolean onTouchEvent(MotionEvent event) {
+            float cx = getWidth() / 2f;
+            float cy = dp(88);
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                downAngle = (float)Math.toDegrees(Math.atan2(event.getY() - cy, event.getX() - cx));
+                startValue = value;
+                return true;
+            }
+            if (event.getAction() == MotionEvent.ACTION_MOVE || event.getAction() == MotionEvent.ACTION_UP) {
+                float angle = (float)Math.toDegrees(Math.atan2(event.getY() - cy, event.getX() - cx));
+                float delta = angle - downAngle;
+                while (delta < -180) delta += 360;
+                while (delta > 180) delta -= 360;
+                int next = Math.max(0, Math.min(100, startValue + Math.round(delta * 100f / 270f)));
+                if (next != value) {
+                    value = next;
+                    listener.onChanged(value);
+                    invalidate();
+                }
+                return true;
+            }
+            return true;
+        }
     }
 
     private void releasePlayer() {
