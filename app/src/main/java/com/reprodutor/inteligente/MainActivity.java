@@ -254,7 +254,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("Zerar programações?")
                 .setMessage("Isso apagará os horários de ligar e desligar das quatro programações. Os tempos tocando e parado serão mantidos.")
-                .setNegativeButton("Cancelar", null)
+                .setNegativeButton("Cancelar", (dialog, which) -> applyEqualizer(prefs.getInt("graves", 50), prefs.getInt("agudos", 50)))
                 .setPositiveButton("Zerar", (dialog, which) -> {
                     SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
                     SharedPreferences.Editor editor = prefs.edit();
@@ -535,12 +535,16 @@ public class MainActivity extends Activity {
         try {
             short bands = equalizer.getNumberOfBands();
             if (bands < 1) return;
-            short lowBand = 0;
-            short highBand = (short) (bands - 1);
-            short lowLevel = (short) (equalizerMin + (equalizerMax - equalizerMin) * bass / 100);
-            short highLevel = (short) (equalizerMin + (equalizerMax - equalizerMin) * treble / 100);
-            equalizer.setBandLevel(lowBand, lowLevel);
-            if (highBand != lowBand) equalizer.setBandLevel(highBand, highLevel);
+            // 50% é neutro; 0% reduz e 100% aumenta até 12 dB.
+            int bassLevel = Math.max(equalizerMin, Math.min(equalizerMax, (bass - 50) * 24));
+            int trebleLevel = Math.max(equalizerMin, Math.min(equalizerMax, (treble - 50) * 24));
+            int bandsPerSide = bands / 2;
+            for (short band = 0; band < bandsPerSide; band++) {
+                equalizer.setBandLevel(band, (short) bassLevel);
+            }
+            for (short band = (short) (bands - bandsPerSide); band < bands; band++) {
+                equalizer.setBandLevel(band, (short) trebleLevel);
+            }
         } catch (Exception ignored) { }
     }
 
@@ -563,7 +567,7 @@ public class MainActivity extends Activity {
         bassBar.setMax(100);
         bassBar.setProgress(prefs.getInt("graves", 50));
         bassBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { bassValue.setText(value + "%"); }
+            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { bassValue.setText(value + "%"); if (fromUser) applyEqualizer(value, 50); }
             public void onStartTrackingTouch(SeekBar seekBar) { }
             public void onStopTrackingTouch(SeekBar seekBar) { }
         });
@@ -574,11 +578,11 @@ public class MainActivity extends Activity {
         trebleBar.setMax(100);
         trebleBar.setProgress(prefs.getInt("agudos", 50));
         trebleBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { trebleValue.setText(value + "%"); }
+            public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) { trebleValue.setText(value + "%"); if (fromUser) applyEqualizer(bassBar.getProgress(), value); }
             public void onStartTrackingTouch(SeekBar seekBar) { }
             public void onStopTrackingTouch(SeekBar seekBar) { }
         });
-        TextView hint = label("50% mantém o som original. Ajuste aos poucos para evitar distorção.", 12, MUTED, false);
+        TextView hint = label("50% é neutro; abaixo reduz e acima aumenta. Teste com o áudio tocando.", 12, MUTED, false);
         hint.setPadding(0, dp(16), 0, 0);
         content.addView(bassLabel); content.addView(bassValue); content.addView(bassBar);
         content.addView(trebleLabel); content.addView(trebleValue); content.addView(trebleBar); content.addView(hint);
