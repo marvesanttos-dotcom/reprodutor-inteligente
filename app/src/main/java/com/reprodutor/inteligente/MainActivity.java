@@ -386,7 +386,6 @@ public class MainActivity extends Activity {
                 player.setDataSource(this, uri);
                 player.setOnPreparedListener(mp -> {
                     playerReady = true;
-                    initializeEqualizer(mp.getAudioSessionId());
                     applyPitch(getSharedPreferences("programacao", MODE_PRIVATE).getInt("tonalidade", 50));
                     status.setText("Áudio carregado. Pronto para reproduzir.");
                     selectedFile.setText("♫  " + uri.getLastPathSegment());
