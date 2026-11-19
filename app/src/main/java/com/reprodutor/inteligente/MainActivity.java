@@ -10,6 +10,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.RecognizerIntent;
 import android.view.Gravity;
 import android.view.View;
@@ -26,6 +28,34 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private MediaPlayer player;
+    private final Handler cycleHandler = new Handler(Looper.getMainLooper());
+    private boolean playerReady = false;
+    private boolean cycleActive = false;
+    private boolean cyclePlaying = false;
+    private Button cycleButton;
+    private final Runnable cycleStep = new Runnable() {
+        @Override public void run() {
+            if (!cycleActive || player == null || !playerReady) return;
+            SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+            if (cyclePlaying) {
+                try { if (player.isPlaying()) player.pause(); } catch (Exception ignored) { }
+                cyclePlaying = false;
+                status.setText("Ciclo automático: pausa");
+                cycleHandler.postDelayed(this, prefs.getInt("parado", 5) * 60L * 1000L);
+            } else {
+                try {
+                    if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
+                    player.start();
+                    cyclePlaying = true;
+                    status.setText("Ciclo automático: reproduzindo");
+                    cycleHandler.postDelayed(this, prefs.getInt("tocando", 5) * 60L * 1000L);
+                } catch (Exception e) {
+                    stopCycle();
+                    status.setText("Não foi possível iniciar o ciclo");
+                }
+            }
+        }
+    };
     private final Button[] configButtons = new Button[4];
     private TextView status;
     private TextView selectedFile;
@@ -138,6 +168,11 @@ public class MainActivity extends Activity {
             configParams.topMargin = dp(8);
             page.addView(b, configParams);
         }
+        cycleButton = makeButton("▶  INICIAR CICLO AUTOMÁTICO", WHITE, BG, v -> toggleCycle());
+        LinearLayout.LayoutParams cycleParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
+        cycleParams.topMargin = dp(16);
+        page.addView(cycleButton, cycleParams);
 
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
@@ -235,14 +270,21 @@ public class MainActivity extends Activity {
                 if (uri == null) return;
                 try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                 catch (Exception ignored) { }
+                stopCycle();
                 releasePlayer();
+                playerReady = false;
                 player = new MediaPlayer();
                 player.setDataSource(this, uri);
                 player.setOnPreparedListener(mp -> {
+                    playerReady = true;
                     status.setText("Áudio carregado. Pronto para reproduzir.");
                     selectedFile.setText("♫  " + uri.getLastPathSegment());
                 });
-                player.setOnCompletionListener(mp -> status.setText("Reprodução concluída"));
+                player.setOnCompletionListener(mp -> {
+                    if (cycleActive && cyclePlaying) {
+                        try { mp.seekTo(0); mp.start(); } catch (Exception ignored) { }
+                    } else status.setText("Reprodução concluída");
+                });
                 player.setOnErrorListener((mp, what, extra) -> {
                     status.setText("Não foi possível reproduzir este áudio");
                     return true;
@@ -258,6 +300,30 @@ public class MainActivity extends Activity {
             ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
             if (results != null && !results.isEmpty()) handleVoiceCommand(results.get(0));
         }
+    }
+
+    private void toggleCycle() {
+        if (cycleActive) {
+            stopCycle();
+            status.setText("Ciclo automático parado");
+            return;
+        }
+        if (player == null || !playerReady) {
+            Toast.makeText(this, "Escolha um áudio e aguarde carregar", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        cycleActive = true;
+        cyclePlaying = false;
+        cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
+        cycleHandler.removeCallbacks(cycleStep);
+        cycleStep.run();
+    }
+
+    private void stopCycle() {
+        cycleActive = false;
+        cyclePlaying = false;
+        cycleHandler.removeCallbacks(cycleStep);
+        if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
     }
 
     private void playAudio() {
@@ -277,6 +343,7 @@ public class MainActivity extends Activity {
     }
 
     private void stopAudio() {
+        stopCycle();
         if (player != null) {
             try {
                 if (player.isPlaying()) player.pause();
@@ -311,6 +378,7 @@ public class MainActivity extends Activity {
     }
 
     private void releasePlayer() {
+        playerReady = false;
         if (player != null) {
             try { player.stop(); } catch (Exception ignored) { }
             player.release();
@@ -320,6 +388,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        stopCycle();
         releasePlayer();
         super.onDestroy();
     }
