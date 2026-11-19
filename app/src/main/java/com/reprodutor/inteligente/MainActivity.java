@@ -258,7 +258,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("Zerar programações?")
                 .setMessage("Isso apagará os horários de ligar e desligar das quatro programações. Os tempos tocando e parado serão mantidos.")
-                .setNegativeButton("Cancelar", (dialog, which) -> applyEqualizer(prefs.getInt("graves", 50), prefs.getInt("agudos", 50)))
+                .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Zerar", (dialog, which) -> {
                     SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
                     SharedPreferences.Editor editor = prefs.edit();
