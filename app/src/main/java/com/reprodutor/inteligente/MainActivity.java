@@ -26,11 +26,11 @@ public class MainActivity extends Activity {
     private TextView selectedFile;
     private static final int PICK_AUDIO = 10;
     private static final int SPEECH = 11;
-    private final int BG = Color.rgb(7, 17, 13);
-    private final int PANEL = Color.rgb(19, 37, 28);
-    private final int GREEN = Color.rgb(169, 224, 99);
-    private final int WHITE = Color.rgb(238, 246, 238);
-    private final int MUTED = Color.rgb(157, 177, 162);
+    private final int BG = Color.BLACK;
+    private final int PANEL = Color.rgb(16, 16, 16);
+    private final int GREEN = Color.WHITE;
+    private final int WHITE = Color.WHITE;
+    private final int MUTED = Color.rgb(190, 190, 190);
 
     @Override
     protected void onCreate(Bundle state) {
@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
         logo.setText("🐦");
         logo.setTextSize(29);
         logo.setGravity(Gravity.CENTER);
-        logo.setBackground(round(GREEN, 100));
+        logo.setTextColor(Color.BLACK);\n        logo.setBackground(round(Color.WHITE, 100));
         brand.addView(logo, new LinearLayout.LayoutParams(dp(58), dp(58)));
         LinearLayout brandText = new LinearLayout(this);
         brandText.setOrientation(LinearLayout.VERTICAL);
@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
         playerCard.setBackground(round(PANEL, 24));
         TextView disc = label("♫", 54, GREEN, true);
         disc.setGravity(Gravity.CENTER);
-        disc.setBackground(round(Color.rgb(31, 58, 41), 100));
+        disc.setBackground(round(Color.rgb(35, 35, 35), 100));
         LinearLayout.LayoutParams discParams = new LinearLayout.LayoutParams(dp(112), dp(112));
         discParams.bottomMargin = dp(18);
         playerCard.addView(disc, discParams);
@@ -94,9 +94,9 @@ public class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         controls.setOrientation(LinearLayout.HORIZONTAL);
-        Button stop = makeButton("■", Color.rgb(39, 62, 47), WHITE, v -> stopAudio());
+        Button stop = makeButton("■", Color.rgb(35, 35, 35), WHITE, v -> stopAudio());
         Button play = makeButton("▶  REPRODUZIR", GREEN, BG, v -> playAudio());
-        Button pause = makeButton("Ⅱ", Color.rgb(39, 62, 47), WHITE, v -> pauseAudio());
+        Button pause = makeButton("Ⅱ", Color.rgb(35, 35, 35), WHITE, v -> pauseAudio());
         LinearLayout.LayoutParams side = new LinearLayout.LayoutParams(0, dp(54), 1);
         side.setMargins(dp(4), dp(12), dp(4), 0);
         controls.addView(stop, side);
