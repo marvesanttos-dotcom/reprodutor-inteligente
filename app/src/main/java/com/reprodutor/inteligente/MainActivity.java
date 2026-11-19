@@ -539,15 +539,24 @@ public class MainActivity extends Activity {
         try {
             short bands = equalizer.getNumberOfBands();
             if (bands < 1) return;
-            // 50% é neutro; 0% reduz e 100% aumenta até 12 dB.
-            int bassLevel = Math.max(equalizerMin, Math.min(equalizerMax, (bass - 50) * 24));
-            int trebleLevel = Math.max(equalizerMin, Math.min(equalizerMax, (treble - 50) * 24));
-            int bandsPerSide = bands / 2;
-            for (short band = 0; band < bandsPerSide; band++) {
-                equalizer.setBandLevel(band, (short) bassLevel);
-            }
-            for (short band = (short) (bands - bandsPerSide); band < bands; band++) {
-                equalizer.setBandLevel(band, (short) trebleLevel);
+
+            // 50% é neutro. Os extremos usam toda a faixa suportada pelo aparelho.
+            int bassLevel = bass >= 50
+                    ? (equalizerMax * (bass - 50)) / 50
+                    : (equalizerMin * (50 - bass)) / 50;
+            int trebleLevel = treble >= 50
+                    ? (equalizerMax * (treble - 50)) / 50
+                    : (equalizerMin * (50 - treble)) / 50;
+
+            for (short band = 0; band < bands; band++) {
+                int centerHz = equalizer.getCenterFreq(band) / 1000;
+                if (centerHz <= 250) {
+                    equalizer.setBandLevel(band, (short) bassLevel);
+                } else if (centerHz >= 4000) {
+                    equalizer.setBandLevel(band, (short) trebleLevel);
+                } else {
+                    equalizer.setBandLevel(band, (short) 0);
+                }
             }
         } catch (Exception ignored) { }
     }
