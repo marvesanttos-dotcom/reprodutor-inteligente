@@ -12,6 +12,9 @@ import android.view.MotionEvent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
+import android.media.AudioManager;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.PlaybackParams;
 import android.media.audiofx.Equalizer;
 import android.net.Uri;
@@ -38,6 +41,27 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private MediaPlayer player;
+    private AudioManager audioManager;
+    private AudioFocusRequest audioFocusRequest;
+    private boolean resumeAfterFocusLoss = false;
+    private final AudioManager.OnAudioFocusChangeListener audioFocusListener = change -> {
+        if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) return;
+        if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+            if (player != null && playerReady && player.isPlaying()) {
+                try { player.pause(); resumeAfterFocusLoss = true; } catch (Exception ignored) { }
+            }
+        } else if (change == AudioManager.AUDIOFOCUS_GAIN) {
+            if (resumeAfterFocusLoss && player != null && playerReady) {
+                try { player.start(); startBackgroundPlayback(); } catch (Exception ignored) { }
+            }
+            resumeAfterFocusLoss = false;
+        } else if (change == AudioManager.AUDIOFOCUS_LOSS) {
+            resumeAfterFocusLoss = false;
+            if (player != null && playerReady && player.isPlaying()) {
+                try { player.pause(); } catch (Exception ignored) { }
+            }
+        }
+    };
     private Equalizer equalizer;
     private short equalizerMin = -1500;
     private short equalizerMax = 1500;
@@ -65,8 +89,7 @@ public class MainActivity extends Activity {
                 cyclePlaying = true;
                 try {
                     if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
-                    player.start();
-                    startBackgroundPlayback();
+                    startPlayerWithFocus();
                     nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
                     status.setText("Programação ativa • reproduzindo");
                 } catch (Exception e) { stopCycle(); status.setText("Não foi possível iniciar o áudio"); return; }
@@ -79,8 +102,7 @@ public class MainActivity extends Activity {
                 } else {
                     try {
                         if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
-                        player.start();
-                        startBackgroundPlayback();
+                        startPlayerWithFocus();
                         cyclePlaying = true;
                         nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
                         status.setText("Programação ativa • reproduzindo");
@@ -402,7 +424,7 @@ public class MainActivity extends Activity {
                 });
                 player.setOnCompletionListener(mp -> {
                     if (cycleActive && cyclePlaying) {
-                        try { mp.seekTo(0); mp.start(); } catch (Exception ignored) { }
+                        try { mp.seekTo(0); startPlayerWithFocus(); } catch (Exception ignored) { }
                     } else status.setText("Reprodução concluída");
                 });
                 player.setOnErrorListener((mp, what, extra) -> {
@@ -471,6 +493,45 @@ public class MainActivity extends Activity {
         if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
     }
 
+    private void requestPlaybackAudioFocus() {
+        if (audioManager == null) audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (audioManager == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (audioFocusRequest == null) {
+                AudioAttributes attributes = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build();
+                audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                        .setAudioAttributes(attributes)
+                        .setAcceptsDelayedFocusGain(true)
+                        .setWillPauseWhenDucked(false)
+                        .setOnAudioFocusChangeListener(audioFocusListener)
+                        .build();
+            }
+            audioManager.requestAudioFocus(audioFocusRequest);
+        } else {
+            audioManager.requestAudioFocus(audioFocusListener, AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN);
+        }
+    }
+
+    private void abandonPlaybackAudioFocus() {
+        resumeAfterFocusLoss = false;
+        if (audioManager == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && audioFocusRequest != null) {
+            audioManager.abandonAudioFocusRequest(audioFocusRequest);
+        } else {
+            audioManager.abandonAudioFocus(audioFocusListener);
+        }
+    }
+
+    private void startPlayerWithFocus() {
+        requestPlaybackAudioFocus();
+        player.start();
+        startBackgroundPlayback();
+    }
+
     private void playAudio() {
         if (cycleActive) {
             stopCycle();
@@ -480,7 +541,7 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
             return;
         }
-        try { player.start(); status.setText("Reproduzindo áudio"); }
+        try { startPlayerWithFocus(); status.setText("Reproduzindo áudio"); }
         catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
     }
 
@@ -492,6 +553,7 @@ public class MainActivity extends Activity {
         if (player != null && player.isPlaying()) {
             player.pause();
             stopBackgroundPlayback();
+            abandonPlaybackAudioFocus();
             status.setText("Áudio pausado");
         } else status.setText("Nenhum áudio está tocando");
     }
@@ -502,6 +564,7 @@ public class MainActivity extends Activity {
             try {
                 if (player.isPlaying()) player.pause();
                 stopBackgroundPlayback();
+                abandonPlaybackAudioFocus();
                 player.seekTo(0);
                 status.setText("Áudio parado");
             } catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
@@ -734,6 +797,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         stopCycle();
         stopBackgroundPlayback();
+        abandonPlaybackAudioFocus();
         releaseEqualizer();
         releasePlayer();
         super.onDestroy();
