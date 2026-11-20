@@ -413,6 +413,7 @@ public class MainActivity extends Activity {
                 releasePlayer();
                 playerReady = false;
                 player = new MediaPlayer();
+                player.setLooping(true);
                 player.setWakeMode(this, android.os.PowerManager.PARTIAL_WAKE_LOCK);
                 player.setDataSource(this, uri);
                 player.setOnPreparedListener(mp -> {
