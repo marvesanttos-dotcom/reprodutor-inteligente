@@ -119,7 +119,7 @@ public class MainActivity extends Activity {
     private static final int SPEECH = 11;
     private final int BG = Color.BLACK;
     private final int PANEL = Color.rgb(16, 16, 16);
-    private final int GREEN = Color.WHITE;
+    private final int GREEN = Color.rgb(255, 190, 45);
     private final int WHITE = Color.WHITE;
     private final int MUTED = Color.rgb(190, 190, 190);
 
@@ -141,11 +141,11 @@ public class MainActivity extends Activity {
         brand.setGravity(Gravity.CENTER_VERTICAL);
         brand.setOrientation(LinearLayout.HORIZONTAL);
         TextView logo = new TextView(this);
-        logo.setText("🎶");
+        logo.setText("♫");
         logo.setTextSize(29);
         logo.setGravity(Gravity.CENTER);
-        logo.setTextColor(Color.BLACK);
-        logo.setBackground(round(Color.WHITE, 100));
+        logo.setTextColor(Color.rgb(255, 190, 45));
+        logo.setBackground(round(Color.rgb(24, 18, 5), 100));
         brand.addView(logo, new LinearLayout.LayoutParams(dp(58), dp(58)));
         LinearLayout brandText = new LinearLayout(this);
         brandText.setOrientation(LinearLayout.VERTICAL);
@@ -729,7 +729,7 @@ public class MainActivity extends Activity {
             paint.setColor(0xFF333333);
             arc.set(cx - radius, cy - radius, cx + radius, cy + radius);
             canvas.drawArc(arc, 135, 270, false, paint);
-            paint.setColor(Color.WHITE);
+            paint.setColor(Color.rgb(255, 190, 45));
             canvas.drawArc(arc, 135, 270f * value / 100f, false, paint);
 
             paint.setStyle(Paint.Style.FILL);
