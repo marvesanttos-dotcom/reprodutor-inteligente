@@ -19,6 +19,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.os.Build;
 import java.util.Calendar;
 import android.speech.RecognizerIntent;
 import android.view.Gravity;
@@ -65,6 +66,7 @@ public class MainActivity extends Activity {
                 try {
                     if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
                     player.start();
+                    startBackgroundPlayback();
                     nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
                     status.setText("Programação ativa • reproduzindo");
                 } catch (Exception e) { stopCycle(); status.setText("Não foi possível iniciar o áudio"); return; }
@@ -78,6 +80,7 @@ public class MainActivity extends Activity {
                     try {
                         if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
                         player.start();
+                        startBackgroundPlayback();
                         cyclePlaying = true;
                         nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
                         status.setText("Programação ativa • reproduzindo");
@@ -388,6 +391,7 @@ public class MainActivity extends Activity {
                 releasePlayer();
                 playerReady = false;
                 player = new MediaPlayer();
+                player.setWakeMode(this, android.os.PowerManager.PARTIAL_WAKE_LOCK);
                 player.setDataSource(this, uri);
                 player.setOnPreparedListener(mp -> {
                     playerReady = true;
@@ -487,6 +491,7 @@ public class MainActivity extends Activity {
         }
         if (player != null && player.isPlaying()) {
             player.pause();
+            stopBackgroundPlayback();
             status.setText("Áudio pausado");
         } else status.setText("Nenhum áudio está tocando");
     }
@@ -496,6 +501,7 @@ public class MainActivity extends Activity {
         if (player != null) {
             try {
                 if (player.isPlaying()) player.pause();
+                stopBackgroundPlayback();
                 player.seekTo(0);
                 status.setText("Áudio parado");
             } catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
@@ -705,6 +711,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void startBackgroundPlayback() {
+        Intent intent = new Intent(this, PlaybackService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
+        else startService(intent);
+    }
+
+    private void stopBackgroundPlayback() {
+        stopService(new Intent(this, PlaybackService.class));
+    }
+
     private void releasePlayer() {
         playerReady = false;
         if (player != null) {
@@ -717,6 +733,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         stopCycle();
+        stopBackgroundPlayback();
         releaseEqualizer();
         releasePlayer();
         super.onDestroy();
