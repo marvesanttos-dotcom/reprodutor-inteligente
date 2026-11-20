@@ -271,6 +271,22 @@ public class MainActivity extends Activity {
         cycleParams.topMargin = dp(16);
         page.addView(cycleButton, cycleParams);
 
+        TextView activationInfo = label("Para comprar ou ativar o aplicativo, fale diretamente pelo WhatsApp. Após o pagamento, aguarde até 30 minutos para a conferência e liberação.", 12, MUTED, false);
+        activationInfo.setGravity(Gravity.CENTER);
+        activationInfo.setPadding(0, dp(24), 0, dp(10));
+        page.addView(activationInfo);
+
+        Button whatsapp = makeButton("LIBERAR ACESSO", GREEN, BG, v -> {
+            try {
+                Intent contact = new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://wa.me/5574991920985?text=Ol%C3%A1%21%20Quero%20ativar%20o%20Reprodutor%20Inteligente.%20Vou%20enviar%20meu%20comprovante%20para%20confer%C3%AAncia."));
+                startActivity(contact);
+            } catch (Exception e) {
+                Toast.makeText(this, "Não foi possível abrir o WhatsApp", Toast.LENGTH_SHORT).show();
+            }
+        });
+        page.addView(whatsapp, match());
+
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(28), 0, 0);
