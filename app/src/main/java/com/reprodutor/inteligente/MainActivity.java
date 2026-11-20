@@ -48,14 +48,18 @@ public class MainActivity extends Activity {
     private AudioFocusRequest audioFocusRequest;
     private boolean resumeAfterFocusLoss = false;
     private final AudioManager.OnAudioFocusChangeListener audioFocusListener = change -> {
-        if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) return;
-        if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-            if (player != null && playerReady && player.isPlaying()) {
-                try { player.pause(); resumeAfterFocusLoss = true; } catch (Exception ignored) { }
-            }
-        } else if (change == AudioManager.AUDIOFOCUS_GAIN) {
+        // Sons breves do sistema/notificações não devem interromper o canto.
+        // O Android pode reduzir o volume automaticamente durante o ducking.
+        if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK
+                || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+            return;
+        }
+        if (change == AudioManager.AUDIOFOCUS_GAIN) {
             if (resumeAfterFocusLoss && player != null && playerReady) {
-                try { player.start(); startBackgroundPlayback(); } catch (Exception ignored) { }
+                try {
+                    if (!player.isPlaying()) player.start();
+                    startBackgroundPlayback();
+                } catch (Exception ignored) { }
             }
             resumeAfterFocusLoss = false;
         } else if (change == AudioManager.AUDIOFOCUS_LOSS) {
@@ -424,6 +428,13 @@ public class MainActivity extends Activity {
                 releasePlayer();
                 playerReady = false;
                 player = new MediaPlayer();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    AudioAttributes playbackAttributes = new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build();
+                    player.setAudioAttributes(playbackAttributes);
+                }
                 player.setLooping(true);
                 player.setWakeMode(this, android.os.PowerManager.PARTIAL_WAKE_LOCK);
                 player.setDataSource(this, uri);
