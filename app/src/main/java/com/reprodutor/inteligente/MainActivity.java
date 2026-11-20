@@ -8,6 +8,8 @@ import android.graphics.Color;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -119,7 +121,7 @@ public class MainActivity extends Activity {
     private static final int SPEECH = 11;
     private final int BG = Color.BLACK;
     private final int PANEL = Color.rgb(16, 16, 16);
-    private final int GREEN = Color.rgb(255, 190, 45);
+    private final int GREEN = Color.rgb(255, 215, 0);
     private final int WHITE = Color.WHITE;
     private final int MUTED = Color.rgb(190, 190, 190);
 
@@ -144,8 +146,8 @@ public class MainActivity extends Activity {
         logo.setText("♫");
         logo.setTextSize(29);
         logo.setGravity(Gravity.CENTER);
-        logo.setTextColor(Color.rgb(255, 190, 45));
-        logo.setBackground(round(Color.rgb(24, 18, 5), 100));
+        logo.setTextColor(Color.rgb(255, 225, 80));
+        logo.setBackground(goldGradient(100));
         brand.addView(logo, new LinearLayout.LayoutParams(dp(58), dp(58)));
         LinearLayout brandText = new LinearLayout(this);
         brandText.setOrientation(LinearLayout.VERTICAL);
@@ -168,7 +170,7 @@ public class MainActivity extends Activity {
         playerCard.setBackground(round(PANEL, 24));
         TextView disc = label("♫", 54, GREEN, true);
         disc.setGravity(Gravity.CENTER);
-        disc.setBackground(round(Color.rgb(35, 35, 35), 100));
+        disc.setBackground(goldGradient(100));
         LinearLayout.LayoutParams discParams = new LinearLayout.LayoutParams(dp(112), dp(112));
         discParams.bottomMargin = dp(18);
         playerCard.addView(disc, discParams);
@@ -358,6 +360,15 @@ public class MainActivity extends Activity {
 
     private int dp(int value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
 
+    private GradientDrawable goldGradient(int radius) {
+        GradientDrawable d = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[] { Color.rgb(255, 248, 170), Color.rgb(255, 215, 0), Color.rgb(218, 145, 0), Color.rgb(255, 236, 105) });
+        d.setCornerRadius(dp(radius));
+        d.setStroke(dp(1), Color.rgb(255, 242, 160));
+        return d;
+    }
+
     private GradientDrawable round(int color, int radius) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
@@ -385,7 +396,7 @@ public class MainActivity extends Activity {
         b.setTextColor(foreground);
         b.setAllCaps(false);
         b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        b.setBackground(round(background, 16));
+        b.setBackground(background == GREEN ? goldGradient(16) : round(background, 16));
         b.setElevation(dp(2));
         b.setOnClickListener(action);
         return b;
@@ -729,8 +740,11 @@ public class MainActivity extends Activity {
             paint.setColor(0xFF333333);
             arc.set(cx - radius, cy - radius, cx + radius, cy + radius);
             canvas.drawArc(arc, 135, 270, false, paint);
-            paint.setColor(Color.rgb(255, 190, 45));
+            paint.setShader(new LinearGradient(cx, cy - radius, cx, cy + radius,
+                    new int[] { Color.rgb(255, 248, 170), Color.rgb(255, 215, 0), Color.rgb(218, 145, 0) },
+                    null, Shader.TileMode.CLAMP));
             canvas.drawArc(arc, 135, 270f * value / 100f, false, paint);
+            paint.setShader(null);
 
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0xFF202020);
