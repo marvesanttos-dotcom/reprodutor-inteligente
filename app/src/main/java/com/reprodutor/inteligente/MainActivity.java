@@ -37,6 +37,8 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.content.SharedPreferences;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -271,11 +273,42 @@ public class MainActivity extends Activity {
         cycleParams.topMargin = dp(16);
         page.addView(cycleButton, cycleParams);
 
+        Button licenseButton = makeButton("🔐  LICENÇA E ATIVAÇÃO", PANEL, WHITE, v -> showLicenseInfo());
+        LinearLayout.LayoutParams licenseParams = match();
+        licenseParams.topMargin = dp(18);
+        page.addView(licenseButton, licenseParams);
+
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(28), 0, 0);
         page.addView(footer);
         setContentView(scroll);
+    }
+
+    private void showLicenseInfo() {
+        try {
+            String installationId = DeviceIdentity.getInstallationId(this);
+            DeviceIdentity.ensureSigningKey();
+            new AlertDialog.Builder(this)
+                    .setTitle("Licença do aplicativo")
+                    .setMessage("Identificação desta instalação:\n\n" + installationId
+                            + "\n\nEsta identificação é exclusiva deste aparelho. A ativação online e a confirmação do Pix serão conectadas na próxima etapa. Nenhum pagamento é considerado aprovado nesta versão.")
+                    .setPositiveButton("Copiar identificação", (dialog, which) -> {
+                        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        if (clipboard != null) {
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Identificação da instalação", installationId));
+                            Toast.makeText(this, "Identificação copiada", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .setNegativeButton("Fechar", null)
+                    .show();
+        } catch (Exception e) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Não foi possível preparar a licença")
+                    .setMessage("O Android não conseguiu criar a identidade segura deste aparelho. Tente novamente.")
+                    .setPositiveButton("OK", null)
+                    .show();
+        }
     }
 
     private String displayAmPm(String value) {
