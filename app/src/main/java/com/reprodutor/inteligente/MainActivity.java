@@ -271,7 +271,7 @@ public class MainActivity extends Activity {
         cycleParams.topMargin = dp(16);
         page.addView(cycleButton, cycleParams);
 
-        TextView activationInfo = label("Para comprar ou ativar o aplicativo, fale diretamente pelo WhatsApp. Após o pagamento, aguarde até 30 minutos para a conferência e liberação.", 12, MUTED, false);
+        TextView activationInfo = label("Para comprar ou ativar o aplicativo, fale diretamente pelo WhatsApp.", 12, MUTED, false);
         activationInfo.setGravity(Gravity.CENTER);
         activationInfo.setPadding(0, dp(24), 0, dp(10));
         page.addView(activationInfo);
