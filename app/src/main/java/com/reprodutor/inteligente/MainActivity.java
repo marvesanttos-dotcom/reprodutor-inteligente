@@ -41,6 +41,7 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private MediaPlayer player;
+    private boolean playerReady = false;
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
     private boolean resumeAfterFocusLoss = false;
@@ -66,7 +67,6 @@ public class MainActivity extends Activity {
     private short equalizerMin = -1500;
     private short equalizerMax = 1500;
     private final Handler cycleHandler = new Handler(Looper.getMainLooper());
-    private boolean playerReady = false;
     private boolean cycleActive = false;
     private boolean cyclePlaying = false;
     private boolean scheduleWindowActive = false;
