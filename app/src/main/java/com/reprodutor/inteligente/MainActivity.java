@@ -181,6 +181,11 @@ public class MainActivity extends Activity {
         audioSettingsParams.topMargin = dp(12);
         page.addView(audioSettings, audioSettingsParams);
 
+        Button voiceControl = makeButton("🎙  CONTROLE POR VOZ", PANEL, WHITE, v -> startSpeech());
+        LinearLayout.LayoutParams voiceControlParams = match();
+        voiceControlParams.topMargin = dp(8);
+        page.addView(voiceControl, voiceControlParams);
+
         TextView manualTitle = label("CONTROLE MANUAL", 12, MUTED, true);
         manualTitle.setPadding(0, dp(22), 0, dp(10));
         page.addView(manualTitle);
@@ -386,6 +391,7 @@ public class MainActivity extends Activity {
                 player.setDataSource(this, uri);
                 player.setOnPreparedListener(mp -> {
                     playerReady = true;
+                    initializeEqualizer(mp.getAudioSessionId());
                     applyPitch(getSharedPreferences("programacao", MODE_PRIVATE).getInt("tonalidade", 50));
                     status.setText("Áudio carregado. Pronto para reproduzir.");
                     selectedFile.setText("♫  " + uri.getLastPathSegment());
