@@ -276,7 +276,7 @@ public class MainActivity extends Activity {
         activationInfo.setPadding(0, dp(24), 0, dp(10));
         page.addView(activationInfo);
 
-        Button whatsapp = makeButton("ATIVAÇÃO • FALAR PELO WHATSAPP", GREEN, BG, v -> {
+        Button whatsapp = makeButton("LIBERAR ACESSO", GREEN, BG, v -> {
             try {
                 Intent contact = new Intent(Intent.ACTION_VIEW,
                         Uri.parse("https://wa.me/5574991920985?text=Ol%C3%A1%21%20Quero%20ativar%20o%20Reprodutor%20Inteligente.%20Vou%20enviar%20meu%20comprovante%20para%20confer%C3%AAncia."));
