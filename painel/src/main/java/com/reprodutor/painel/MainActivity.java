@@ -15,7 +15,7 @@ import java.util.concurrent.Executors;
 import org.json.*;
 
 public class MainActivity extends Activity {
-    private TextView status, requests;
+    private TextView status; private LinearLayout requestArea;
     private EditText password;
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     @Override public void onCreate(Bundle state) {
@@ -27,7 +27,7 @@ public class MainActivity extends Activity {
         Button start=new Button(this); start.setText("INICIAR SERVIDOR"); root.addView(start); start.setOnClickListener(v->{Intent i=new Intent(this,ServerService.class);if(Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);status.setText("Servidor iniciado na porta 8080 (se o Android permitir).");});
         password=new EditText(this); password.setHint("Senha administrativa"); password.setSingleLine(true); password.setTextColor(-1); password.setHintTextColor(0xffaaaaaa); root.addView(password);
         Button refresh=new Button(this); refresh.setText("CARREGAR SOLICITAÇÕES"); root.addView(refresh); refresh.setOnClickListener(v->loadPending());
-        requests=new TextView(this); requests.setTextColor(-1); requests.setPadding(0,16,0,16); root.addView(requests);
+        requestArea=new LinearLayout(this); requestArea.setOrientation(1); root.addView(requestArea);
         status=new TextView(this); status.setTextColor(0xffffd700); status.setText("Servidor desligado"); root.addView(status);
         TextView warning=new TextView(this); warning.setTextColor(0xffffcc66); warning.setPadding(0,20,0,0); warning.setText("A pré-análise detecta tipo e repetição do arquivo, mas não confirma o Pix. Confira o crédito no RecargaPay antes de aprovar. Para clientes fora da sua rede, será necessário configurar um túnel HTTPS seguro."); root.addView(warning);
         setContentView(root);
@@ -52,17 +52,17 @@ public class MainActivity extends Activity {
         }catch(Exception e){runOnUiThread(()->status.setText("Não foi possível carregar. Inicie o servidor e confira a senha."));}});
     }
     private void showRequests(JSONArray arr,String pass){
-        requests.removeAllViews();
-        if(arr.length()==0){requests.setText("Nenhuma solicitação.");return;}
+        requestArea.removeAllViews();
+        if(arr.length()==0){TextView empty=new TextView(this);empty.setText("Nenhuma solicitação.");empty.setTextColor(-1);requestArea.addView(empty);return;}
         StringBuilder out=new StringBuilder();
         for(int i=0;i<arr.length();i++){JSONObject o=arr.optJSONObject(i);out.append("#").append(o.optLong("id")).append(" • ").append(o.optString("status")).append("\nDispositivo: ").append(o.optString("device")).append("\nArquivo: ").append(o.optString("file","não enviado")).append("\nPré-análise: ").append(o.optString("analysis","aguardando")).append("\n\n");}
-        requests.setText(out.toString());
+        TextView listing=new TextView(this);listing.setTextColor(-1);listing.setText(out.toString());requestArea.addView(listing);
         for(int i=0;i<arr.length();i++){
             JSONObject o=arr.optJSONObject(i);if(!"PENDING".equals(o.optString("status"))||o.optString("file","").isEmpty())continue;
             final long id=o.optLong("id");
-            Button approve=new Button(this);approve.setText("APROVAR solicitação #"+id+" (Pix já conferido)");((LinearLayout)requests.getParent()).addView(approve);
+            Button approve=new Button(this);approve.setText("APROVAR solicitação #"+id+" (Pix já conferido)");requestArea.addView(approve);
             approve.setOnClickListener(v->new AlertDialog.Builder(this).setMessage("Confirma que você verificou a entrada de R$ 9,99 no RecargaPay?").setNegativeButton("Cancelar",null).setPositiveButton("Sim, aprovar",(d,w)->decide(id,pass,true)).show());
-            Button reject=new Button(this);reject.setText("REJEITAR #"+id);((LinearLayout)requests.getParent()).addView(reject);reject.setOnClickListener(v->decide(id,pass,false));
+            Button reject=new Button(this);reject.setText("REJEITAR #"+id);requestArea.addView(reject);reject.setOnClickListener(v->decide(id,pass,false));
         }
     }
     private void decide(long id,String pass,boolean approve){
