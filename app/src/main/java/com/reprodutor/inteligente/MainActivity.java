@@ -359,18 +359,23 @@ public class MainActivity extends Activity {
                 .getString("audio_uri", null);
         if (saved == null || saved.isEmpty()) return;
         try {
-            loadAudio(Uri.parse(saved));
+            loadAudio(Uri.parse(saved), true);
         } catch (Exception e) {
             status.setText("O áudio salvo não está mais disponível. Escolha novamente.");
         }
     }
 
     private void loadAudio(Uri uri) {
+        loadAudio(uri, false);
+    }
+
+    private void loadAudio(Uri uri, boolean restoring) {
         // A seleção apenas prepara e guarda o áudio. Nunca envia comando PLAY.
         try {
             Intent command = new Intent(this, PlaybackService.class);
             command.setAction(PlaybackService.ACTION_LOAD);
             command.setData(uri);
+            command.putExtra(PlaybackService.EXTRA_RESTORE, restoring);
             startService(command);
             status.setText("Áudio selecionado • toque em REPRODUZIR para começar.");
             selectedFile.setText("♫  " + uri.getLastPathSegment());
