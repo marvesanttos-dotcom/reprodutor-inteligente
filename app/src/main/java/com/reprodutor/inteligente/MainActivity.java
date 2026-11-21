@@ -324,6 +324,7 @@ public class MainActivity extends Activity {
                 if (cycleActive) {
                     cycleActive = false;
                     if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
+                    sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
                 }
                 try {
                     getContentResolver().takePersistableUriPermission(
