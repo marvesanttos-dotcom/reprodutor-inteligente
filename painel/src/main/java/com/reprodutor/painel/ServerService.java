@@ -96,13 +96,17 @@ public class ServerService extends Service {
             String hash=shaFile(src); String mime=detect(src);
             if(mime==null) return jsonError("file_type_unsupported");
             SQLiteDatabase d=db.getWritableDatabase();
-            Cursor dup=d.rawQuery("SELECT id FROM requests WHERE file_hash=? LIMIT 1",new String[]{hash});
-            boolean repeated=dup.moveToFirst(); dup.close();
-            Cursor c=d.rawQuery("SELECT id,expires,status FROM requests WHERE code_hash=?",new String[]{sha(supplied)});
+            Cursor c=d.rawQuery("SELECT id,expires,status,file_hash FROM requests WHERE code_hash=?",new String[]{sha(supplied)});
             if(!c.moveToFirst()){c.close();return jsonError("code_invalid");}
-            long id=c.getLong(0), exp=c.getLong(1); String status=c.getString(2); c.close();
+            long id=c.getLong(0), exp=c.getLong(1);
+            String status=c.getString(2), existingHash=c.getString(3);
+            c.close();
             long now=System.currentTimeMillis()/1000L;
             if(now>exp || !"PENDING".equals(status)) return jsonError("code_expired_or_used");
+            if(existingHash!=null && !existingHash.isEmpty()) return jsonError("receipt_already_uploaded");
+            Cursor dup=d.rawQuery("SELECT id FROM requests WHERE file_hash=? AND id<>? LIMIT 1",
+                    new String[]{hash,String.valueOf(id)});
+            boolean repeated=dup.moveToFirst(); dup.close();
             File dest=new File(uploads,id+"_"+hash.substring(0,12)+(mime.equals("application/pdf")?".pdf":".img"));
             try(InputStream in=new FileInputStream(src);OutputStream out=new FileOutputStream(dest)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}
             String analysis=repeated?"SUSPEITO: arquivo idêntico já recebido":(mime.equals("application/pdf")?"INCOMPLETO: PDF reconhecido; conteúdo e pagamento precisam de conferência":"INCOMPLETO: imagem reconhecida; pagamento precisa de conferência");
@@ -134,7 +138,7 @@ public class ServerService extends Service {
             if(h[0]=='%'&&h[1]=='P'&&h[2]=='D'&&h[3]=='F')return "application/pdf";
             if((h[0]&255)==0xFF&&(h[1]&255)==0xD8)return "image/jpeg";
             if((h[0]&255)==0x89&&h[1]=='P'&&h[2]=='N'&&h[3]=='G')return "image/png";
-            if(h[0]=='R'&&h[1]=='I'&&h[2]=='F'&&h[3]=='F'&&h[8-1]=='E')return "image/webp";
+            // Somente PDF, JPEG e PNG são aceitos nesta versão.
             return null;
         }
         Response unauthorized(){return newFixedLengthResponse(Response.Status.UNAUTHORIZED,"application/json","{\"error\":\"unauthorized\"}");}
