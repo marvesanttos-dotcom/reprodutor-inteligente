@@ -26,7 +26,6 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.os.Build;
 import java.util.Calendar;
-import android.speech.RecognizerIntent;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -37,8 +36,6 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.content.SharedPreferences;
-import java.text.Normalizer;
-import java.util.ArrayList;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
@@ -122,7 +119,6 @@ public class MainActivity extends Activity {
     private TextView status;
     private TextView selectedFile;
     private static final int PICK_AUDIO = 10;
-    private static final int SPEECH = 11;
     private final int BG = Color.BLACK;
     private final int PANEL = Color.rgb(16, 16, 16);
     private final int GREEN = Color.rgb(255, 215, 0);
@@ -212,11 +208,6 @@ public class MainActivity extends Activity {
         audioSettingsParams.topMargin = dp(12);
         page.addView(audioSettings, audioSettingsParams);
 
-        Button voiceControl = makeButton("🎙  CONTROLE POR VOZ", PANEL, WHITE, v -> startSpeech());
-        LinearLayout.LayoutParams voiceControlParams = match();
-        voiceControlParams.topMargin = dp(8);
-        page.addView(voiceControl, voiceControlParams);
-
         TextView manualTitle = label("CONTROLE MANUAL", 12, MUTED, true);
         manualTitle.setPadding(0, dp(22), 0, dp(10));
         page.addView(manualTitle);
@@ -270,22 +261,6 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
         cycleParams.topMargin = dp(16);
         page.addView(cycleButton, cycleParams);
-
-        TextView activationInfo = label("Para comprar ou ativar o aplicativo, fale diretamente pelo WhatsApp.", 12, MUTED, false);
-        activationInfo.setGravity(Gravity.CENTER);
-        activationInfo.setPadding(0, dp(24), 0, dp(10));
-        page.addView(activationInfo);
-
-        Button whatsapp = makeButton("LIBERAR ACESSO", GREEN, BG, v -> {
-            try {
-                Intent contact = new Intent(Intent.ACTION_VIEW,
-                        Uri.parse("https://wa.me/5574991920985?text=Ol%C3%A1%21%20Quero%20ativar%20o%20Reprodutor%20Inteligente.%20Vou%20enviar%20meu%20comprovante%20para%20confer%C3%AAncia."));
-                startActivity(contact);
-            } catch (Exception e) {
-                Toast.makeText(this, "Não foi possível abrir o WhatsApp", Toast.LENGTH_SHORT).show();
-            }
-        });
-        page.addView(whatsapp, match());
 
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
@@ -477,9 +452,6 @@ public class MainActivity extends Activity {
                 status.setText("Erro ao abrir áudio");
                 Toast.makeText(this, "Não foi possível abrir esse arquivo", Toast.LENGTH_SHORT).show();
             }
-        } else if (requestCode == SPEECH && resultCode == RESULT_OK && data != null) {
-            ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-            if (results != null && !results.isEmpty()) handleVoiceCommand(results.get(0));
         }
     }
 
@@ -608,30 +580,6 @@ public class MainActivity extends Activity {
                 status.setText("Áudio parado");
             } catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
         } else status.setText("Escolha um áudio primeiro");
-    }
-
-    private void handleVoiceCommand(String spoken) {
-        String command = Normalizer.normalize(spoken.toLowerCase(new Locale("pt", "BR")), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "");
-        if (command.contains("escolher") || command.contains("abrir audio") || command.contains("selecionar audio")) {
-            status.setText("Abrindo seus áudios"); chooseAudio();
-        } else if (command.contains("pausar") || command.equals("pause")) pauseAudio();
-        else if (command.contains("parar")) stopAudio();
-        else if (command.contains("reproduzir") || command.contains("tocar") || command.contains("continuar") || command.contains("play")) playAudio();
-        else status.setText("Você disse: " + spoken + ". Tente reproduzir, pausar, parar ou escolher áudio.");
-    }
-
-    private void startSpeech() {
-        try {
-            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR");
-            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Diga: reproduzir, pausar, parar ou escolher áudio");
-            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-            startActivityForResult(intent, SPEECH);
-        } catch (Exception e) {
-            Toast.makeText(this, "Reconhecimento de voz não disponível neste aparelho", Toast.LENGTH_LONG).show();
-        }
     }
 
     private void initializeEqualizer(int audioSessionId) {
