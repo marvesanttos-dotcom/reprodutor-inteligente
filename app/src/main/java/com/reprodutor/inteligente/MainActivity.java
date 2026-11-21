@@ -111,22 +111,6 @@ public class MainActivity extends Activity {
 
         Button choose = makeButton("＋   ESCOLHER ÁUDIO", GREEN, BG, v -> chooseAudio());
         playerCard.addView(choose, match());
-        LinearLayout controls = new LinearLayout(this);
-        controls.setGravity(Gravity.CENTER);
-        controls.setOrientation(LinearLayout.HORIZONTAL);
-        Button stop = makeButton("■", Color.rgb(35, 35, 35), WHITE, v -> stopAudio());
-        Button play = makeButton("▶  REPRODUZIR", GREEN, BG, v -> playAudio());
-        Button pause = makeButton("Ⅱ", Color.rgb(35, 35, 35), WHITE, v -> pauseAudio());
-        LinearLayout.LayoutParams side = new LinearLayout.LayoutParams(0, dp(54), 1);
-        side.setMargins(dp(4), dp(12), dp(4), 0);
-        controls.addView(stop, side);
-        LinearLayout.LayoutParams middle = new LinearLayout.LayoutParams(0, dp(54), 2);
-        middle.setMargins(dp(4), dp(12), dp(4), 0);
-        controls.addView(play, middle);
-        LinearLayout.LayoutParams side2 = new LinearLayout.LayoutParams(0, dp(54), 1);
-        side2.setMargins(dp(4), dp(12), dp(4), 0);
-        controls.addView(pause, side2);
-        playerCard.addView(controls);
         page.addView(playerCard);
 
         Button audioSettings = makeButton("♫  TONALIDADE • CANTO MAIS GROSSO OU MAIS FINO", PANEL, WHITE, v -> showAudioSettings());
@@ -134,9 +118,6 @@ public class MainActivity extends Activity {
         audioSettingsParams.topMargin = dp(12);
         page.addView(audioSettings, audioSettingsParams);
 
-        TextView manualTitle = label("CONTROLE MANUAL", 12, MUTED, true);
-        manualTitle.setPadding(0, dp(22), 0, dp(10));
-        page.addView(manualTitle);
         TextView scheduleTitle = label("PROGRAMAÇÕES AUTOMÁTICAS", 12, MUTED, true);
         scheduleTitle.setPadding(0, dp(25), 0, dp(10));
         page.addView(scheduleTitle);
@@ -381,7 +362,7 @@ public class MainActivity extends Activity {
             command.setData(uri);
             command.putExtra(PlaybackService.EXTRA_RESTORE, restoring);
             startService(command);
-            status.setText("Áudio selecionado • toque em REPRODUZIR para começar.");
+            status.setText("Áudio selecionado • pronto para a programação automática.");
             selectedFile.setText("♫  " + uri.getLastPathSegment());
         } catch (Exception e) {
             status.setText("Não foi possível carregar o áudio selecionado.");
@@ -428,40 +409,6 @@ public class MainActivity extends Activity {
         cycleActive = false;
         if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
         sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
-    }
-
-    private void playAudio() {
-        if (!hasSavedAudio()) {
-            Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (cycleActive) {
-            cycleActive = false;
-            if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
-            sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
-        }
-        sendPlaybackCommand(PlaybackService.ACTION_PLAY, true);
-        status.setText("Comando de reprodução enviado");
-    }
-
-    private void pauseAudio() {
-        if (cycleActive) {
-            cycleActive = false;
-            if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
-            sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
-        }
-        sendPlaybackCommand(PlaybackService.ACTION_PAUSE, false);
-        status.setText("Áudio pausado");
-    }
-
-    private void stopAudio() {
-        if (cycleActive) {
-            cycleActive = false;
-            if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
-        }
-        sendPlaybackCommand(PlaybackService.ACTION_STOP, false);
-        sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
-        status.setText("Áudio parado");
     }
 
     private void applyPitch(int tonalidade) {
