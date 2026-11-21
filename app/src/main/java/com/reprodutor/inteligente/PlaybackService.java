@@ -22,8 +22,6 @@ import java.util.Calendar;
 
 public class PlaybackService extends Service {
     public static final String ACTION_LOAD = "com.reprodutor.inteligente.LOAD";
-    public static final String ACTION_PLAY = "com.reprodutor.inteligente.PLAY";
-    public static final String ACTION_PAUSE = "com.reprodutor.inteligente.PAUSE";
     public static final String ACTION_STOP = "com.reprodutor.inteligente.STOP";
     public static final String ACTION_AUTO_START = "com.reprodutor.inteligente.AUTO_START";
     public static final String ACTION_AUTO_STOP = "com.reprodutor.inteligente.AUTO_STOP";
@@ -37,8 +35,6 @@ public class PlaybackService extends Service {
     private MediaPlayer player;
     private Uri currentUri;
     private boolean playerReady = false;
-    private boolean pendingManualPlay = false;
-    private boolean manualPlaying = false;
     private boolean autoActive = false;
     private boolean autoPlaying = false;
     private boolean scheduleWindowActive = false;
@@ -98,7 +94,7 @@ public class PlaybackService extends Service {
                 pausePlayer(false);
             } else if (change == AudioManager.AUDIOFOCUS_GAIN && resumeAfterFocusGain) {
                 resumeAfterFocusGain = false;
-                if (manualPlaying || (autoActive && autoPlaying)) startPlayer();
+                if (autoActive && autoPlaying) startPlayer();
             }
         };
         createNotificationChannel();
@@ -106,7 +102,7 @@ public class PlaybackService extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
-        if (ACTION_PLAY.equals(action) || ACTION_AUTO_START.equals(action)) {
+        if (ACTION_AUTO_START.equals(action)) {
             startForeground(NOTIFICATION_ID, buildNotification("Preparando reprodução"));
         }
 
@@ -116,11 +112,10 @@ public class PlaybackService extends Service {
             if (uri != null && currentUri == null && restoring) {
                 SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
                 autoActive = prefs.getBoolean("auto_active", false);
-                manualPlaying = prefs.getBoolean("manual_playing", false);
-                if (autoActive || manualPlaying) {
-                    startForeground(NOTIFICATION_ID, buildNotification("Restaurando reprodução"));
+                if (autoActive) {
+                    startForeground(NOTIFICATION_ID, buildNotification("Restaurando programação automática"));
                 }
-                loadAudio(uri, manualPlaying);
+                loadAudio(uri, false);
                 if (autoActive) {
                     handler.removeCallbacks(scheduleTick);
                     handler.post(scheduleTick);
@@ -128,8 +123,6 @@ public class PlaybackService extends Service {
             } else if (uri != null && !uri.equals(currentUri)) {
                 autoActive = false;
                 autoPlaying = false;
-                manualPlaying = false;
-                pendingManualPlay = false;
                 scheduleWindowActive = false;
                 handler.removeCallbacks(scheduleTick);
                 getSharedPreferences("programacao", MODE_PRIVATE).edit()
@@ -140,27 +133,13 @@ public class PlaybackService extends Service {
             } else if (uri != null && player == null) {
                 loadAudio(uri, false);
             }
-        } else if (ACTION_PLAY.equals(action)) {
-            manualPlaying = true;
-            pendingManualPlay = true;
-            persistPlaybackState();
-            if (playerReady) startPlayer();
-            else loadSavedAudio(true);
-        } else if (ACTION_PAUSE.equals(action)) {
-            pendingManualPlay = false;
-            manualPlaying = false;
-            pausePlayer();
-            persistPlaybackState();
-            if (!autoActive) stopForegroundCompat();
-        } else if (ACTION_STOP.equals(action)) {
+        } else if (ACTION_STOP.equals(action) || ACTION_AUTO_STOP.equals(action)) {
             // PARAR cancela também a programação automática para impedir que
             // o ciclo volte a iniciar o áudio logo após o comando de parada.
             autoActive = false;
             autoPlaying = false;
             scheduleWindowActive = false;
             handler.removeCallbacks(scheduleTick);
-            pendingManualPlay = false;
-            manualPlaying = false;
             getSharedPreferences("programacao", MODE_PRIVATE).edit()
                     .putBoolean("auto_active", false)
                     .putBoolean("manual_playing", false)
@@ -173,8 +152,6 @@ public class PlaybackService extends Service {
             persistPlaybackState();
         } else if (ACTION_AUTO_START.equals(action)) {
             autoActive = true;
-            manualPlaying = false;
-            pendingManualPlay = false;
             autoPlaying = false;
             scheduleWindowActive = false;
             nextCycleChangeAt = 0L;
@@ -184,15 +161,6 @@ public class PlaybackService extends Service {
             handler.removeCallbacks(scheduleTick);
             handler.post(scheduleTick);
             updateNotification("Automático ativo • aguardando horário");
-        } else if (ACTION_AUTO_STOP.equals(action)) {
-            autoActive = false;
-            autoPlaying = false;
-            scheduleWindowActive = false;
-            handler.removeCallbacks(scheduleTick);
-            getSharedPreferences("programacao", MODE_PRIVATE).edit()
-                    .putBoolean("auto_active", false).apply();
-            if (!manualPlaying) pausePlayer();
-            if (!manualPlaying) stopForegroundCompat();
         } else if (ACTION_SET_PITCH.equals(action)) {
             applyPitch(intent.getIntExtra(EXTRA_PITCH, 50));
         } else if (intent == null) {
@@ -204,15 +172,11 @@ public class PlaybackService extends Service {
     private void restoreAfterRestart() {
         SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
         autoActive = prefs.getBoolean("auto_active", false);
-        manualPlaying = prefs.getBoolean("manual_playing", false);
-        if (autoActive) startForeground(NOTIFICATION_ID, buildNotification("Restaurando programação automática"));
-        else if (manualPlaying) startForeground(NOTIFICATION_ID, buildNotification("Restaurando reprodução"));
         if (autoActive) {
+            startForeground(NOTIFICATION_ID, buildNotification("Restaurando programação automática"));
             loadSavedAudio(false);
             handler.removeCallbacks(scheduleTick);
             handler.post(scheduleTick);
-        } else if (manualPlaying) {
-            loadSavedAudio(true);
         }
     }
 
@@ -221,8 +185,6 @@ public class PlaybackService extends Service {
         if (saved == null || saved.isEmpty()) return;
         try { loadAudio(Uri.parse(saved), playWhenReady); }
         catch (Exception e) {
-            pendingManualPlay = false;
-            manualPlaying = false;
             persistPlaybackState();
         }
     }
@@ -230,7 +192,7 @@ public class PlaybackService extends Service {
     private void loadAudio(Uri uri, boolean playWhenReady) {
         currentUri = uri;
         releasePlayer();
-        pendingManualPlay = playWhenReady;
+        // A reprodução só é iniciada pelo agendador automático.
         try {
             player = new MediaPlayer();
             player.setVolume(1f, 1f);
@@ -245,20 +207,16 @@ public class PlaybackService extends Service {
                 playerReady = true;
                 try { mp.pause(); mp.seekTo(0); } catch (Exception ignored) { }
                 applyPitch(getSharedPreferences("programacao", MODE_PRIVATE).getInt("tonalidade", 50));
-                if (pendingManualPlay || (autoActive && autoPlaying)) startPlayer();
+                if (autoActive && autoPlaying) startPlayer();
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 playerReady = false;
-                pendingManualPlay = false;
-                manualPlaying = false;
                 persistPlaybackState();
                 return true;
             });
             player.prepareAsync();
         } catch (Exception e) {
             releasePlayer();
-            pendingManualPlay = false;
-            manualPlaying = false;
             persistPlaybackState();
         }
     }
@@ -291,7 +249,6 @@ public class PlaybackService extends Service {
             }
             resumeAfterFocusGain = false;
             if (!player.isPlaying()) player.start();
-            if (!autoActive) manualPlaying = true;
             persistPlaybackState();
             updateNotification(autoActive ? "Programação automática ativa" : "Reproduzindo áudio");
         } catch (Exception ignored) { }
@@ -320,7 +277,7 @@ public class PlaybackService extends Service {
 
     private void persistPlaybackState() {
         getSharedPreferences("programacao", MODE_PRIVATE).edit()
-                .putBoolean("manual_playing", manualPlaying).apply();
+                .putBoolean("manual_playing", false).apply();
     }
 
     private boolean isWithinAnySchedule() {
@@ -373,7 +330,7 @@ public class PlaybackService extends Service {
     }
 
     private void updateNotification(String message) {
-        if (autoActive || manualPlaying) {
+        if (autoActive) {
             NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (manager != null) manager.notify(NOTIFICATION_ID, buildNotification(message));
         }
