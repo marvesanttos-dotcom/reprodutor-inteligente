@@ -452,10 +452,15 @@ public class MainActivity extends Activity {
             // Carregar ou restaurar um arquivo nunca autoriza reprodução.
             manualPlaybackRequested = false;
             stopCycle();
+            // Encerra qualquer reprodução/serviço anterior antes de carregar outro arquivo.
+            stopBackgroundPlayback();
+            abandonPlaybackAudioFocus();
             releaseEqualizer();
             releasePlayer();
             playerReady = false;
             player = new MediaPlayer();
+            // Trava de segurança: o áudio permanece mudo até um comando explícito de tocar.
+            player.setVolume(0f, 0f);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 AudioAttributes playbackAttributes = new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -472,6 +477,8 @@ public class MainActivity extends Activity {
                 try {
                     if (mp.isPlaying()) mp.pause();
                     mp.seekTo(0);
+                    // Mesmo que algum caminho inesperado tente iniciar o player, não haverá som.
+                    mp.setVolume(0f, 0f);
                 } catch (Exception ignored) { }
                 // Defesa extra: se algum caminho externo iniciar o player durante o
                 // carregamento, interrompe imediatamente e não mantém serviço ativo.
@@ -591,6 +598,8 @@ public class MainActivity extends Activity {
         if (!manualPlaybackRequested && !(cycleActive && cyclePlaying)) {
             throw new IllegalStateException("Reprodução não autorizada: use REPRODUZIR ou inicie o ciclo automático.");
         }
+        // O volume só é liberado depois de confirmar autorização manual ou automática.
+        player.setVolume(1f, 1f);
         requestPlaybackAudioFocus();
         player.start();
         startBackgroundPlayback();
