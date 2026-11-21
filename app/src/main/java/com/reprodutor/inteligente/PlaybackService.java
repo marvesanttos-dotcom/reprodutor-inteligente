@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
+import android.media.AudioFocusRequest;
 import android.media.MediaPlayer;
 import android.media.PlaybackParams;
 import android.net.Uri;
@@ -238,7 +239,7 @@ public class PlaybackService extends Service {
                     AudioAttributes attrs = new AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_MEDIA)
                             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
-                    AudioManager.AudioFocusRequest request = new AudioManager.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    AudioFocusRequest request = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                             .setAudioAttributes(attrs).setOnAudioFocusChangeListener(focusListener).build();
                     audioManager.requestAudioFocus(request);
                 } else {
