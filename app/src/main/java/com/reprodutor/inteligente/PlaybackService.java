@@ -103,7 +103,19 @@ public class PlaybackService extends Service {
 
         if (ACTION_LOAD.equals(action)) {
             Uri uri = intent.getData();
-            if (uri != null && !uri.equals(currentUri)) {
+            if (uri != null && currentUri == null) {
+                SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+                autoActive = prefs.getBoolean("auto_active", false);
+                manualPlaying = prefs.getBoolean("manual_playing", false);
+                if (autoActive || manualPlaying) {
+                    startForeground(NOTIFICATION_ID, buildNotification("Restaurando reprodução"));
+                }
+                loadAudio(uri, manualPlaying);
+                if (autoActive) {
+                    handler.removeCallbacks(scheduleTick);
+                    handler.post(scheduleTick);
+                }
+            } else if (uri != null && !uri.equals(currentUri)) {
                 autoActive = false;
                 autoPlaying = false;
                 manualPlaying = false;
