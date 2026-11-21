@@ -26,6 +26,7 @@ public class PlaybackService extends Service {
     public static final String ACTION_AUTO_START = "com.reprodutor.inteligente.AUTO_START";
     public static final String ACTION_MANUAL_PLAY = "com.reprodutor.inteligente.MANUAL_PLAY";
     public static final String ACTION_AUTO_STOP = "com.reprodutor.inteligente.AUTO_STOP";
+    public static final String ACTION_PAUSE = "com.reprodutor.inteligente.PAUSE";
     public static final String ACTION_SET_PITCH = "com.reprodutor.inteligente.SET_PITCH";
     public static final String EXTRA_PITCH = "pitch";
     public static final String EXTRA_RESTORE = "restore";
@@ -37,6 +38,7 @@ public class PlaybackService extends Service {
     private Uri currentUri;
     private boolean playerReady = false;
     private boolean autoActive = false;
+    private boolean autoPaused = false;
     private boolean autoPlaying = false;
     private boolean scheduleWindowActive = false;
     private boolean manualOverride = false;
@@ -48,7 +50,7 @@ public class PlaybackService extends Service {
 
     private final Runnable scheduleTick = new Runnable() {
         @Override public void run() {
-            if (!autoActive) return;
+            if (!autoActive || autoPaused) return;
             if (!playerReady || player == null) {
                 handler.postDelayed(this, 1000L);
                 return;
@@ -116,6 +118,8 @@ public class PlaybackService extends Service {
 
         if (ACTION_LOAD.equals(action)) {
             Uri uri = intent.getData();
+            if (uri != null) getSharedPreferences("programacao", MODE_PRIVATE).edit()
+                    .putString("audio_uri", uri.toString()).apply();
             boolean restoring = intent.getBooleanExtra(EXTRA_RESTORE, false);
             if (uri != null && restoring && currentUri == null) {
                 SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
@@ -151,10 +155,16 @@ public class PlaybackService extends Service {
                 if (player != null && playerReady) startPlayer();
                 updateNotification("Automático ativo • reprodução manual");
             }
+        } else if (ACTION_PAUSE.equals(action)) {
+            autoPaused = true;
+            handler.removeCallbacks(scheduleTick);
+            pausePlayer();
+            updateNotification("Programação pausada");
         } else if (ACTION_STOP.equals(action) || ACTION_AUTO_STOP.equals(action)) {
             // PARAR cancela também a programação automática para impedir que
             // o ciclo volte a iniciar o áudio logo após o comando de parada.
             autoActive = false;
+            autoPaused = false;
             autoPlaying = false;
             scheduleWindowActive = false;
             manualOverride = false;
@@ -171,6 +181,7 @@ public class PlaybackService extends Service {
             persistPlaybackState();
         } else if (ACTION_AUTO_START.equals(action)) {
             autoActive = true;
+            autoPaused = false;
             autoPlaying = false;
             scheduleWindowActive = false;
             manualOverride = false;
