@@ -437,15 +437,16 @@ public class MainActivity extends Activity {
                 if (uri == null) return;
                 try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                 catch (Exception ignored) { }
+                // Selecionar um arquivo sempre cancela qualquer reprodução anterior.
+                // Apenas guardamos o URI; o serviço só será iniciado pelo botão INICIAR.
                 getSharedPreferences("programacao", MODE_PRIVATE).edit()
-                        .putString("audio_uri", uri.toString()).apply();
-                Intent loadService = new Intent(this, PlaybackService.class);
-                loadService.setAction(PlaybackService.ACTION_LOAD);
-                loadService.setData(uri);
-                loadService.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                // Ação de carga não precisa ser foreground; a ação AUTO_START
-                // promove o serviço quando a programação realmente começa.
-                startService(loadService);
+                        .putString("audio_uri", uri.toString())
+                        .putBoolean("auto_active", false)
+                        .putBoolean("manual_playing", false)
+                        .apply();
+                Intent stopService = new Intent(this, PlaybackService.class);
+                stopService.setAction(PlaybackService.ACTION_STOP);
+                startService(stopService);
                 stopCycle();
                 releaseEqualizer();
                 releasePlayer();
