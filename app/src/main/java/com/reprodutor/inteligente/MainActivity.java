@@ -585,41 +585,54 @@ public class MainActivity extends Activity {
         startBackgroundPlayback();
     }
 
+    // Todos os comandos são enviados ao PlaybackService, que é o único
+    // responsável pela reprodução automática e pelos horários.
+    private void sendPlaybackCommand(String action) {
+        Intent command = new Intent(this, PlaybackService.class);
+        command.setAction(action);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && PlaybackService.ACTION_AUTO_START.equals(action)) {
+                startForegroundService(command);
+            } else {
+                startService(command);
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível enviar o comando: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void playAudio() {
-        if (player == null || !playerReady) {
-            Toast.makeText(this, "Escolha um áudio e aguarde carregar", Toast.LENGTH_SHORT).show();
+        String uri = getSharedPreferences("programacao", MODE_PRIVATE)
+                .getString("audio_uri", null);
+        if (uri == null || uri.trim().isEmpty()) {
+            Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
             return;
         }
+        // Não depender do MediaPlayer da tela: ele pode estar descarregado
+        // enquanto o serviço possui (ou precisa carregar) o áudio selecionado.
         cycleActive = true;
         cyclePaused = false;
         if (cycleButton != null) cycleButton.setText("▶  EM EXECUÇÃO");
-        status.setText("Programação ativa • funcionando em segundo plano");
-        Intent command = new Intent(this, PlaybackService.class);
-        command.setAction(PlaybackService.ACTION_AUTO_START);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(command);
-        else startService(command);
+        status.setText("Programação ativada • aguardando o horário configurado");
+        sendPlaybackCommand(PlaybackService.ACTION_AUTO_START);
     }
 
     private void pauseAudio() {
-        if (!cycleActive) {
-            status.setText("Inicie a programação primeiro");
-            return;
-        }
+        cycleActive = true;
         cyclePaused = true;
-        Intent command = new Intent(this, PlaybackService.class);
-        command.setAction(PlaybackService.ACTION_PAUSE);
-        startService(command);
+        sendPlaybackCommand(PlaybackService.ACTION_PAUSE);
         if (cycleButton != null) cycleButton.setText("▶  RETOMAR");
         status.setText("Programação pausada • toque em Iniciar para retomar");
     }
 
     private void stopAudio() {
         stopCycle();
-        Intent command = new Intent(this, PlaybackService.class);
-        command.setAction(PlaybackService.ACTION_STOP);
-        startService(command);
+        sendPlaybackCommand(PlaybackService.ACTION_STOP);
         if (player != null && playerReady) {
-            try { if (player.isPlaying()) player.pause(); player.seekTo(0); } catch (Exception ignored) { }
+            try { if (player.isPlaying()) player.pause(); player.seekTo(0); }
+            catch (Exception ignored) { }
         }
         status.setText("Programação parada");
     }
