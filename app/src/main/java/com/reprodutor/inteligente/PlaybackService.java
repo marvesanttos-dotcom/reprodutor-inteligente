@@ -145,10 +145,10 @@ public class PlaybackService extends Service {
                 if (!uri.equals(currentUri) || player == null) loadAudio(uri, false);
             }
         } else if (ACTION_MANUAL_PLAY.equals(action)) {
-            if (autoActive && player != null && playerReady) {
+            if (autoActive) {
                 manualOverride = true;
                 autoPlaying = true;
-                startPlayer();
+                if (player != null && playerReady) startPlayer();
                 updateNotification("Automático ativo • reprodução manual");
             }
         } else if (ACTION_STOP.equals(action) || ACTION_AUTO_STOP.equals(action)) {
