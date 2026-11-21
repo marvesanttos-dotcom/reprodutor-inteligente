@@ -54,7 +54,8 @@ public class MainActivity extends Activity {
             return;
         }
         if (change == AudioManager.AUDIOFOCUS_GAIN) {
-            if (resumeAfterFocusLoss && player != null && playerReady) {
+            if (resumeAfterFocusLoss && player != null && playerReady
+                    && (manualPlaybackRequested || (cycleActive && cyclePlaying))) {
                 try {
                     if (!player.isPlaying()) player.start();
                     startBackgroundPlayback();
@@ -107,11 +108,17 @@ public class MainActivity extends Activity {
                 } else {
                     try {
                         if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
-                        startPlayerWithFocus();
+                        // Autoriza o ciclo antes de chamar o método central de início.
                         cyclePlaying = true;
+                        startPlayerWithFocus();
                         nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
                         status.setText("Programação ativa • reproduzindo");
-                    } catch (Exception e) { stopCycle(); status.setText("Não foi possível iniciar o áudio"); return; }
+                    } catch (Exception e) {
+                        cyclePlaying = false;
+                        stopCycle();
+                        status.setText("Não foi possível iniciar o áudio");
+                        return;
+                    }
                 }
             }
             cycleHandler.postDelayed(this, 1000L);
