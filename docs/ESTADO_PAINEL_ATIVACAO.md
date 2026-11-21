@@ -35,3 +35,8 @@ Este módulo é uma primeira base técnica para execução local no Android. Ele
 - Inicie o servidor e confirme `/health` na rede local.
 - Não use comprovantes reais durante os testes iniciais.
 - Não encaminhe a porta 8080 para a internet sem túnel HTTPS e revisão de segurança.
+
+## Atualização de compatibilidade
+- A senha administrativa usa PBKDF2-HMAC-SHA1 para compatibilidade com Android API 23, com 210.000 iterações e comparação em tempo constante.
+- O upload bloqueia um segundo comprovante para o mesmo código provisório.
+- Formatos aceitos nesta versão: PDF, JPEG e PNG.
