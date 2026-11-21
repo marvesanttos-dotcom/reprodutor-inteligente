@@ -437,6 +437,14 @@ public class MainActivity extends Activity {
                 if (uri == null) return;
                 try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                 catch (Exception ignored) { }
+                getSharedPreferences("programacao", MODE_PRIVATE).edit()
+                        .putString("audio_uri", uri.toString()).apply();
+                Intent loadService = new Intent(this, PlaybackService.class);
+                loadService.setAction(PlaybackService.ACTION_LOAD);
+                loadService.setData(uri);
+                loadService.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(loadService);
+                else startService(loadService);
                 stopCycle();
                 releaseEqualizer();
                 releasePlayer();
@@ -576,7 +584,18 @@ public class MainActivity extends Activity {
     }
 
     private void playAudio() {
-        startOrResumeCycle();
+        if (player == null || !playerReady) {
+            Toast.makeText(this, "Escolha um áudio e aguarde carregar", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        cycleActive = true;
+        cyclePaused = false;
+        if (cycleButton != null) cycleButton.setText("▶  EM EXECUÇÃO");
+        status.setText("Programação ativa • funcionando em segundo plano");
+        Intent command = new Intent(this, PlaybackService.class);
+        command.setAction(PlaybackService.ACTION_AUTO_START);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(command);
+        else startService(command);
     }
 
     private void pauseAudio() {
@@ -585,26 +604,22 @@ public class MainActivity extends Activity {
             return;
         }
         cyclePaused = true;
-        if (player != null && playerReady) {
-            try { if (player.isPlaying()) player.pause(); } catch (Exception ignored) { }
-        }
-        stopBackgroundPlayback();
-        abandonPlaybackAudioFocus();
+        Intent command = new Intent(this, PlaybackService.class);
+        command.setAction(PlaybackService.ACTION_PAUSE);
+        startService(command);
         if (cycleButton != null) cycleButton.setText("▶  RETOMAR");
         status.setText("Programação pausada • toque em Iniciar para retomar");
     }
 
     private void stopAudio() {
         stopCycle();
+        Intent command = new Intent(this, PlaybackService.class);
+        command.setAction(PlaybackService.ACTION_STOP);
+        startService(command);
         if (player != null && playerReady) {
-            try {
-                if (player.isPlaying()) player.pause();
-                stopBackgroundPlayback();
-                abandonPlaybackAudioFocus();
-                player.seekTo(0);
-                status.setText("Programação parada");
-            } catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
-        } else status.setText("Escolha um áudio primeiro");
+            try { if (player.isPlaying()) player.pause(); player.seekTo(0); } catch (Exception ignored) { }
+        }
+        status.setText("Programação parada");
     }
 
     private void initializeEqualizer(int audioSessionId) {
@@ -810,8 +825,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        // O serviço é independente da tela e continua conferindo os horários em segundo plano.
         stopCycle();
-        stopBackgroundPlayback();
         abandonPlaybackAudioFocus();
         releaseEqualizer();
         releasePlayer();
