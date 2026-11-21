@@ -38,6 +38,7 @@ import android.widget.Toast;
 import android.content.SharedPreferences;
 import java.util.Locale;
 
+// Player com comandos de programação: iniciar, pausar e parar.
 public class MainActivity extends Activity {
     private MediaPlayer player;
     private boolean playerReady = false;
@@ -72,21 +73,37 @@ public class MainActivity extends Activity {
     private final Handler cycleHandler = new Handler(Looper.getMainLooper());
     private boolean cycleActive = false;
     private boolean cyclePlaying = false;
+    private boolean cyclePaused = false;
     private boolean scheduleWindowActive = false;
     private long nextCycleChangeAt = 0L;
     private Button cycleButton;
+    private Button playingTimeButton;
+    private Button stoppedTimeButton;
     private final Runnable scheduleTick = new Runnable() {
         @Override public void run() {
             if (!cycleActive) return;
+            if (cyclePaused) return;
             if (player == null || !playerReady) { stopCycle(); return; }
             boolean inside = isWithinAnySchedule();
             long now = SystemClock.elapsedRealtime();
             SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
             if (!inside) {
-                if (player.isPlaying()) { try { player.pause(); } catch (Exception ignored) { } }
+                // Ao sair da janela programada, encerra a reprodução de verdade,
+                // libera o serviço/áudio e deixa o arquivo no início para a próxima janela.
+                if (scheduleWindowActive || cyclePlaying) {
+                    try {
+                        if (player.isPlaying()) player.pause();
+                        player.seekTo(0);
+                    } catch (Exception ignored) { }
+                    stopBackgroundPlayback();
+                    abandonPlaybackAudioFocus();
+                    status.setText("Horário de desligar atingido • aguardando próxima programação");
+                } else {
+                    status.setText("Automático ativo • aguardando próximo horário");
+                }
                 cyclePlaying = false;
                 scheduleWindowActive = false;
-                status.setText("Automático ativo • aguardando próximo horário");
+                nextCycleChangeAt = 0L;
             } else if (!scheduleWindowActive) {
                 scheduleWindowActive = true;
                 cyclePlaying = true;
@@ -156,7 +173,10 @@ public class MainActivity extends Activity {
         TextView sub = label("PROFESSOR  •  CANTOS", 11, MUTED, true);
         brandText.addView(title);
         brandText.addView(sub);
-        brand.addView(brandText);
+        brand.addView(brandText, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        Button settingsButton = makeButton("⚙", PANEL, GREEN, v -> showScheduleSettings());
+        settingsButton.setTextSize(25);
+        brand.addView(settingsButton, new LinearLayout.LayoutParams(dp(54), dp(54)));
         page.addView(brand);
 
         TextView section = label("SEU ESTÚDIO DE SONS", 12, MUTED, true);
@@ -188,15 +208,15 @@ public class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         controls.setOrientation(LinearLayout.HORIZONTAL);
-        Button stop = makeButton("■", Color.rgb(35, 35, 35), WHITE, v -> stopAudio());
-        Button play = makeButton("▶  REPRODUZIR", GREEN, BG, v -> playAudio());
-        Button pause = makeButton("Ⅱ", Color.rgb(35, 35, 35), WHITE, v -> pauseAudio());
+        Button stop = makeButton("■  PARAR", Color.rgb(35, 35, 35), WHITE, v -> stopAudio());
+        cycleButton = makeButton("▶  INICIAR", GREEN, BG, v -> playAudio());
+        Button pause = makeButton("Ⅱ  PAUSE", Color.rgb(35, 35, 35), WHITE, v -> pauseAudio());
         LinearLayout.LayoutParams side = new LinearLayout.LayoutParams(0, dp(54), 1);
         side.setMargins(dp(4), dp(12), dp(4), 0);
         controls.addView(stop, side);
-        LinearLayout.LayoutParams middle = new LinearLayout.LayoutParams(0, dp(54), 2);
+        LinearLayout.LayoutParams middle = new LinearLayout.LayoutParams(0, dp(54), 1.35f);
         middle.setMargins(dp(4), dp(12), dp(4), 0);
-        controls.addView(play, middle);
+        controls.addView(cycleButton, middle);
         LinearLayout.LayoutParams side2 = new LinearLayout.LayoutParams(0, dp(54), 1);
         side2.setMargins(dp(4), dp(12), dp(4), 0);
         controls.addView(pause, side2);
@@ -208,65 +228,68 @@ public class MainActivity extends Activity {
         audioSettingsParams.topMargin = dp(12);
         page.addView(audioSettings, audioSettingsParams);
 
-        TextView manualTitle = label("CONTROLE MANUAL", 12, MUTED, true);
-        manualTitle.setPadding(0, dp(22), 0, dp(10));
-        page.addView(manualTitle);
-        TextView scheduleTitle = label("PROGRAMAÇÕES AUTOMÁTICAS", 12, MUTED, true);
-        scheduleTitle.setPadding(0, dp(25), 0, dp(10));
-        page.addView(scheduleTitle);
-        LinearLayout scheduleHeader = new LinearLayout(this);
-        scheduleHeader.setOrientation(LinearLayout.HORIZONTAL);
-        scheduleHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView scheduleInfo = label("Configure até 4 horários de funcionamento.", 13, WHITE, false);
-        scheduleHeader.addView(scheduleInfo, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        Button resetSchedules = makeButton("↻", Color.TRANSPARENT, WHITE, v -> confirmResetSchedules());
-        resetSchedules.setTextSize(29);
-        resetSchedules.setBackgroundColor(Color.TRANSPARENT);
-        resetSchedules.setElevation(0);
-        resetSchedules.setPadding(0, 0, 0, 0);
-        scheduleHeader.addView(resetSchedules, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        page.addView(scheduleHeader);
-
-        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-        for (int i = 1; i <= 4; i++) {
-            final int slot = i;
-            String startKey = "inicio" + i;
-            String endKey = "fim" + i;
-            String startValue = prefs.getString(startKey, i == 1 ? prefs.getString("inicio", "Não definido") : "Não definido");
-            String endValue = prefs.getString(endKey, i == 1 ? prefs.getString("fim", "Não definido") : "Não definido");
-            configButtons[(i - 1) * 2] = makeButton("PROGRAMAÇÃO " + i + " • LIGA: " + displayAmPm(startValue), WHITE, BG,
-                    v -> chooseTime("inicio" + slot, "Programação " + slot + " • horário para ligar", configButtons[(slot - 1) * 2]));
-            configButtons[(i - 1) * 2 + 1] = makeButton("PROGRAMAÇÃO " + i + " • DESLIGA: " + displayAmPm(endValue), PANEL, WHITE,
-                    v -> chooseTime("fim" + slot, "Programação " + slot + " • horário para desligar", configButtons[(slot - 1) * 2 + 1]));
-        }
-        for (Button b : configButtons) {
-            LinearLayout.LayoutParams configParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
-            configParams.topMargin = dp(7);
-            page.addView(b, configParams);
-        }
-        Button playingTime = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
-                v -> chooseMinutes("tocando", "Tempo tocando (minutos)", configButtons[0]));
-        page.addView(playingTime, match());
-        Button stoppedTime = makeButton("Ⅱ  TEMPO PARADO: " + prefs.getInt("parado", 5) + " MIN", PANEL, WHITE,
-                v -> chooseMinutes("parado", "Tempo parado (minutos)", configButtons[0]));
-        LinearLayout.LayoutParams stoppedParams = match();
-        stoppedParams.topMargin = dp(7);
-        page.addView(stoppedTime, stoppedParams);
-        TextView autoTitle = label("CONTROLE AUTOMÁTICO", 12, MUTED, true);
-        autoTitle.setPadding(0, dp(22), 0, dp(4));
-        page.addView(autoTitle);
-        cycleButton = makeButton("▶  INICIAR CICLO AUTOMÁTICO", WHITE, BG, v -> toggleCycle());
-        LinearLayout.LayoutParams cycleParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
-        cycleParams.topMargin = dp(16);
-        page.addView(cycleButton, cycleParams);
-
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(28), 0, 0);
         page.addView(footer);
         setContentView(scroll);
+    }
+
+    private void showScheduleSettings() {
+        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(16), dp(8), dp(16), dp(16));
+        scroll.addView(content);
+
+        TextView intro = label("Configure até 4 horários de funcionamento.", 13, MUTED, false);
+        intro.setPadding(0, 0, 0, dp(10));
+        content.addView(intro);
+
+        LinearLayout scheduleHeader = new LinearLayout(this);
+        scheduleHeader.setOrientation(LinearLayout.HORIZONTAL);
+        scheduleHeader.setGravity(Gravity.CENTER_VERTICAL);
+        TextView scheduleInfo = label("HORÁRIOS PROGRAMADOS", 12, GREEN, true);
+        scheduleHeader.addView(scheduleInfo, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        Button resetSchedules = makeButton("↻ ZERAR", Color.TRANSPARENT, WHITE, v -> confirmResetSchedules());
+        resetSchedules.setBackground(round(PANEL, 12));
+        scheduleHeader.addView(resetSchedules, new LinearLayout.LayoutParams(dp(104), dp(44)));
+        content.addView(scheduleHeader);
+
+        for (int i = 1; i <= 4; i++) {
+            final int slot = i;
+            String startValue = prefs.getString("inicio" + i, i == 1 ? prefs.getString("inicio", "Não definido") : "Não definido");
+            String endValue = prefs.getString("fim" + i, i == 1 ? prefs.getString("fim", "Não definido") : "Não definido");
+            configButtons[(i - 1) * 2] = makeButton("PROGRAMAÇÃO " + i + " • LIGA: " + displayAmPm(startValue), WHITE, BG,
+                    v -> chooseTime("inicio" + slot, "Programação " + slot + " • horário para ligar", configButtons[(slot - 1) * 2]));
+            configButtons[(i - 1) * 2 + 1] = makeButton("PROGRAMAÇÃO " + i + " • DESLIGA: " + displayAmPm(endValue), PANEL, WHITE,
+                    v -> chooseTime("fim" + slot, "Programação " + slot + " • horário para desligar", configButtons[(slot - 1) * 2 + 1]));
+            for (int index = (i - 1) * 2; index <= (i - 1) * 2 + 1; index++) {
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+                params.topMargin = dp(7);
+                content.addView(configButtons[index], params);
+            }
+        }
+
+        TextView cycleTitle = label("CICLO DE REPRODUÇÃO", 12, GREEN, true);
+        cycleTitle.setPadding(0, dp(22), 0, dp(8));
+        content.addView(cycleTitle);
+        playingTimeButton = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("tocando", "Tempo tocando (minutos)", playingTimeButton));
+        content.addView(playingTimeButton, match());
+        stoppedTimeButton = makeButton("Ⅱ  TEMPO PARADO: " + prefs.getInt("parado", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("parado", "Tempo parado (minutos)", stoppedTimeButton));
+        LinearLayout.LayoutParams stoppedParams = match();
+        stoppedParams.topMargin = dp(7);
+        content.addView(stoppedTimeButton, stoppedParams);
+
+        new AlertDialog.Builder(this)
+                .setTitle("⚙  Configurações")
+                .setView(scroll)
+                .setPositiveButton("Fechar", null)
+                .show();
     }
 
     private String displayAmPm(String value) {
@@ -302,7 +325,7 @@ public class MainActivity extends Activity {
                         String label = i % 2 == 0
                                 ? "PROGRAMAÇÃO " + slot + " • LIGA: Não definido"
                                 : "PROGRAMAÇÃO " + slot + " • DESLIGA: Não definido";
-                        configButtons[i].setText(label);
+                        if (configButtons[i] != null) configButtons[i].setText(label);
                     }
                     if (cycleActive) {
                         stopCycle();
@@ -414,6 +437,16 @@ public class MainActivity extends Activity {
                 if (uri == null) return;
                 try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                 catch (Exception ignored) { }
+                // Selecionar um arquivo sempre cancela qualquer reprodução anterior.
+                // Apenas guardamos o URI; o serviço só será iniciado pelo botão INICIAR.
+                getSharedPreferences("programacao", MODE_PRIVATE).edit()
+                        .putString("audio_uri", uri.toString())
+                        .putBoolean("auto_active", false)
+                        .putBoolean("manual_playing", false)
+                        .apply();
+                Intent stopService = new Intent(this, PlaybackService.class);
+                stopService.setAction(PlaybackService.ACTION_STOP);
+                startService(stopService);
                 stopCycle();
                 releaseEqualizer();
                 releasePlayer();
@@ -476,32 +509,41 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    private void toggleCycle() {
-        if (cycleActive) {
-            stopCycle();
-            status.setText("Ciclo automático parado");
-            return;
-        }
+    private void startOrResumeCycle() {
         if (player == null || !playerReady) {
             Toast.makeText(this, "Escolha um áudio e aguarde carregar", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (cycleActive && cyclePaused) {
+            cyclePaused = false;
+            cyclePlaying = false;
+            scheduleWindowActive = false;
+            nextCycleChangeAt = 0L;
+            cycleHandler.removeCallbacks(scheduleTick);
+            status.setText("Programação retomada • verificando horário");
+            if (cycleButton != null) cycleButton.setText("▶  INICIAR");
+            scheduleTick.run();
+            return;
+        }
+        if (cycleActive) return;
         cycleActive = true;
+        cyclePaused = false;
         cyclePlaying = false;
-        cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
         scheduleWindowActive = false;
         nextCycleChangeAt = 0L;
         cycleHandler.removeCallbacks(scheduleTick);
-        status.setText("Automático ativo • aguardando programação");
+        status.setText("Programação ativa • verificando horários");
+        if (cycleButton != null) cycleButton.setText("▶  EM EXECUÇÃO");
         scheduleTick.run();
     }
 
     private void stopCycle() {
         cycleActive = false;
+        cyclePaused = false;
         cyclePlaying = false;
         cycleHandler.removeCallbacks(scheduleTick);
         scheduleWindowActive = false;
-        if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
+        if (cycleButton != null) cycleButton.setText("▶  INICIAR");
     }
 
     private void requestPlaybackAudioFocus() {
@@ -543,43 +585,56 @@ public class MainActivity extends Activity {
         startBackgroundPlayback();
     }
 
-    private void playAudio() {
-        if (cycleActive) {
-            stopCycle();
-            status.setText("Modo manual");
+    // Todos os comandos são enviados ao PlaybackService, que é o único
+    // responsável pela reprodução automática e pelos horários.
+    private void sendPlaybackCommand(String action) {
+        Intent command = new Intent(this, PlaybackService.class);
+        command.setAction(action);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && PlaybackService.ACTION_AUTO_START.equals(action)) {
+                startForegroundService(command);
+            } else {
+                startService(command);
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível enviar o comando: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
         }
-        if (player == null) {
+    }
+
+    private void playAudio() {
+        String uri = getSharedPreferences("programacao", MODE_PRIVATE)
+                .getString("audio_uri", null);
+        if (uri == null || uri.trim().isEmpty()) {
             Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
             return;
         }
-        try { startPlayerWithFocus(); status.setText("Reproduzindo áudio"); }
-        catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
+        // Não depender do MediaPlayer da tela: ele pode estar descarregado
+        // enquanto o serviço possui (ou precisa carregar) o áudio selecionado.
+        cycleActive = true;
+        cyclePaused = false;
+        if (cycleButton != null) cycleButton.setText("▶  EM EXECUÇÃO");
+        status.setText("Programação ativada • aguardando o horário configurado");
+        sendPlaybackCommand(PlaybackService.ACTION_AUTO_START);
     }
 
     private void pauseAudio() {
-        if (cycleActive) {
-            stopCycle();
-            status.setText("Modo manual");
-        }
-        if (player != null && player.isPlaying()) {
-            player.pause();
-            stopBackgroundPlayback();
-            abandonPlaybackAudioFocus();
-            status.setText("Áudio pausado");
-        } else status.setText("Nenhum áudio está tocando");
+        cycleActive = true;
+        cyclePaused = true;
+        sendPlaybackCommand(PlaybackService.ACTION_PAUSE);
+        if (cycleButton != null) cycleButton.setText("▶  RETOMAR");
+        status.setText("Programação pausada • toque em Iniciar para retomar");
     }
 
     private void stopAudio() {
         stopCycle();
-        if (player != null) {
-            try {
-                if (player.isPlaying()) player.pause();
-                stopBackgroundPlayback();
-                abandonPlaybackAudioFocus();
-                player.seekTo(0);
-                status.setText("Áudio parado");
-            } catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
-        } else status.setText("Escolha um áudio primeiro");
+        sendPlaybackCommand(PlaybackService.ACTION_STOP);
+        if (player != null && playerReady) {
+            try { if (player.isPlaying()) player.pause(); player.seekTo(0); }
+            catch (Exception ignored) { }
+        }
+        status.setText("Programação parada");
     }
 
     private void initializeEqualizer(int audioSessionId) {
@@ -785,8 +840,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        // O serviço é independente da tela e continua conferindo os horários em segundo plano.
         stopCycle();
-        stopBackgroundPlayback();
         abandonPlaybackAudioFocus();
         releaseEqualizer();
         releasePlayer();
