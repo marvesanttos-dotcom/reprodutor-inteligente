@@ -210,7 +210,7 @@ public class PlaybackService extends Service {
                 playerReady = true;
                 try { mp.pause(); mp.seekTo(0); } catch (Exception ignored) { }
                 applyPitch(getSharedPreferences("programacao", MODE_PRIVATE).getInt("tonalidade", 50));
-                if (autoActive && autoPlaying) startPlayer();
+                // Nunca iniciar áudio ao terminar o carregamento; somente scheduleTick controla o play.
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 playerReady = false;
