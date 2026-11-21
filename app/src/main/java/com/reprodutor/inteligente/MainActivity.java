@@ -455,11 +455,17 @@ public class MainActivity extends Activity {
             player.setWakeMode(this, android.os.PowerManager.PARTIAL_WAKE_LOCK);
             player.setDataSource(this, uri);
             player.setOnPreparedListener(mp -> {
+                // Selecionar ou restaurar um arquivo nunca deve iniciar a reprodução.
+                // O áudio só começa quando o usuário toca em REPRODUZIR ou inicia o ciclo.
+                try {
+                    if (mp.isPlaying()) mp.pause();
+                    mp.seekTo(0);
+                } catch (Exception ignored) { }
                 playerReady = true;
                 initializeEqualizer(mp.getAudioSessionId());
                 applyPitch(getSharedPreferences("programacao", MODE_PRIVATE)
                         .getInt("tonalidade", 50));
-                status.setText("Áudio salvo e carregado. Pronto para reproduzir.");
+                status.setText("Áudio carregado • toque em REPRODUZIR para começar.");
                 selectedFile.setText("♫  " + uri.getLastPathSegment());
             });
             player.setOnCompletionListener(mp -> {
