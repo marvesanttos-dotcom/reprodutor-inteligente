@@ -153,14 +153,24 @@ public class PlaybackService extends Service {
             persistPlaybackState();
             if (!autoActive) stopForegroundCompat();
         } else if (ACTION_STOP.equals(action)) {
+            // PARAR cancela também a programação automática para impedir que
+            // o ciclo volte a iniciar o áudio logo após o comando de parada.
+            autoActive = false;
+            autoPlaying = false;
+            scheduleWindowActive = false;
+            handler.removeCallbacks(scheduleTick);
             pendingManualPlay = false;
             manualPlaying = false;
+            getSharedPreferences("programacao", MODE_PRIVATE).edit()
+                    .putBoolean("auto_active", false)
+                    .putBoolean("manual_playing", false)
+                    .apply();
             pausePlayer();
             if (player != null && playerReady) {
                 try { player.seekTo(0); } catch (Exception ignored) { }
             }
+            stopForegroundCompat();
             persistPlaybackState();
-            if (!autoActive) stopForegroundCompat();
         } else if (ACTION_AUTO_START.equals(action)) {
             autoActive = true;
             manualPlaying = false;
