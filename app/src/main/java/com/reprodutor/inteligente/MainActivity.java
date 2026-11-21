@@ -41,6 +41,8 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private MediaPlayer player;
     private boolean playerReady = false;
+    // A reprodução manual só é autorizada pelo botão REPRODUZIR.
+    private boolean manualPlaybackRequested = false;
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
     private boolean resumeAfterFocusLoss = false;
@@ -439,6 +441,8 @@ public class MainActivity extends Activity {
 
     private void loadAudio(Uri uri) {
         try {
+            // Carregar ou restaurar um arquivo nunca autoriza reprodução.
+            manualPlaybackRequested = false;
             stopCycle();
             releaseEqualizer();
             releasePlayer();
@@ -461,6 +465,12 @@ public class MainActivity extends Activity {
                     if (mp.isPlaying()) mp.pause();
                     mp.seekTo(0);
                 } catch (Exception ignored) { }
+                // Defesa extra: se algum caminho externo iniciar o player durante o
+                // carregamento, interrompe imediatamente e não mantém serviço ativo.
+                if (!manualPlaybackRequested && !cycleActive) {
+                    try { if (mp.isPlaying()) mp.pause(); } catch (Exception ignored) { }
+                    stopBackgroundPlayback();
+                }
                 playerReady = true;
                 initializeEqualizer(mp.getAudioSessionId());
                 applyPitch(getSharedPreferences("programacao", MODE_PRIVATE)
@@ -570,6 +580,9 @@ public class MainActivity extends Activity {
     }
 
     private void startPlayerWithFocus() {
+        if (!manualPlaybackRequested && !(cycleActive && cyclePlaying)) {
+            throw new IllegalStateException("Reprodução não autorizada: use REPRODUZIR ou inicie o ciclo automático.");
+        }
         requestPlaybackAudioFocus();
         player.start();
         startBackgroundPlayback();
@@ -584,11 +597,18 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
             return;
         }
-        try { startPlayerWithFocus(); status.setText("Reproduzindo áudio"); }
-        catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
+        try {
+            manualPlaybackRequested = true;
+            startPlayerWithFocus();
+            status.setText("Reproduzindo áudio");
+        } catch (IllegalStateException e) {
+            manualPlaybackRequested = false;
+            status.setText("Aguarde o áudio carregar e tente novamente");
+        }
     }
 
     private void pauseAudio() {
+        manualPlaybackRequested = false;
         if (cycleActive) {
             stopCycle();
             status.setText("Modo manual");
@@ -602,6 +622,7 @@ public class MainActivity extends Activity {
     }
 
     private void stopAudio() {
+        manualPlaybackRequested = false;
         stopCycle();
         if (player != null) {
             try {
