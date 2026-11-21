@@ -29,6 +29,7 @@ public class PlaybackService extends Service {
     public static final String ACTION_AUTO_STOP = "com.reprodutor.inteligente.AUTO_STOP";
     public static final String ACTION_SET_PITCH = "com.reprodutor.inteligente.SET_PITCH";
     public static final String EXTRA_PITCH = "pitch";
+    public static final String EXTRA_RESTORE = "restore";
 
     private static final String CHANNEL_ID = "reprodutor_playback";
     private static final int NOTIFICATION_ID = 41;
@@ -103,7 +104,8 @@ public class PlaybackService extends Service {
 
         if (ACTION_LOAD.equals(action)) {
             Uri uri = intent.getData();
-            if (uri != null && currentUri == null) {
+            boolean restoring = intent.getBooleanExtra(EXTRA_RESTORE, false);
+            if (uri != null && currentUri == null && restoring) {
                 SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
                 autoActive = prefs.getBoolean("auto_active", false);
                 manualPlaying = prefs.getBoolean("manual_playing", false);
