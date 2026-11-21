@@ -94,7 +94,7 @@ public class PlaybackService extends Service {
                 pausePlayer(false);
             } else if (change == AudioManager.AUDIOFOCUS_GAIN && resumeAfterFocusGain) {
                 resumeAfterFocusGain = false;
-                if (autoActive && autoPlaying) startPlayer();
+                // Não iniciar no callback de preparação. Apenas scheduleTick pode iniciar.
             }
         };
         createNotificationChannel();
