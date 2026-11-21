@@ -443,8 +443,9 @@ public class MainActivity extends Activity {
                 loadService.setAction(PlaybackService.ACTION_LOAD);
                 loadService.setData(uri);
                 loadService.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(loadService);
-                else startService(loadService);
+                // Ação de carga não precisa ser foreground; a ação AUTO_START
+                // promove o serviço quando a programação realmente começa.
+                startService(loadService);
                 stopCycle();
                 releaseEqualizer();
                 releasePlayer();
