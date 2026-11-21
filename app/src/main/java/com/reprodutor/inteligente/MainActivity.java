@@ -160,21 +160,26 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams stoppedParams = match();
         stoppedParams.topMargin = dp(7);
         page.addView(stoppedTime, stoppedParams);
-        TextView autoTitle = label("CONTROLE AUTOMÁTICO", 12, MUTED, true);
-        autoTitle.setPadding(0, dp(22), 0, dp(4));
-        page.addView(autoTitle);
-        cycleButton = makeButton("▶  INICIAR CICLO AUTOMÁTICO", WHITE, BG, v -> toggleCycle());
-        LinearLayout.LayoutParams cycleParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
-        cycleParams.topMargin = dp(16);
-        page.addView(cycleButton, cycleParams);
+        LinearLayout autoHeader = new LinearLayout(this);
+        autoHeader.setOrientation(LinearLayout.HORIZONTAL);
+        autoHeader.setGravity(Gravity.CENTER_VERTICAL);
+        autoHeader.setPadding(0, dp(22), 0, dp(4));
+        TextView autoTitle = label("AUTOMÁTICO", 12, MUTED, true);
+        autoHeader.addView(autoTitle, new LinearLayout.LayoutParams(0, dp(42), 1));
+        cycleButton = makeButton("●  DESLIGADO", PANEL, MUTED, v -> toggleCycle());
+        cycleButton.setTextSize(11);
+        cycleButton.setElevation(0);
+        cycleButton.setBackground(round(PANEL, 20));
+        LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(dp(132), dp(38));
+        autoHeader.addView(cycleButton, toggleParams);
+        page.addView(autoHeader);
 
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(28), 0, 0);
         page.addView(footer);
         cycleActive = prefs.getBoolean("auto_active", false);
-        if (cycleActive) cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
+        if (cycleActive) setCycleButtonState(true); else setCycleButtonState(false);
         setContentView(scroll);
         restoreSavedAudio();
     }
@@ -321,11 +326,9 @@ public class MainActivity extends Activity {
         if (requestCode == PICK_AUDIO && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
             if (uri != null) {
-                if (cycleActive) {
-                    cycleActive = false;
-                    if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
-                    sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
-                }
+                cycleActive = false;
+                setCycleButtonState(false);
+                sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
                 try {
                     getContentResolver().takePersistableUriPermission(
                             uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -345,7 +348,7 @@ public class MainActivity extends Activity {
                 .getString("audio_uri", null);
         if (saved == null || saved.isEmpty()) return;
         try {
-            loadAudio(Uri.parse(saved), false);
+            loadAudio(Uri.parse(saved), true);
         } catch (Exception e) {
             status.setText("O áudio salvo não está mais disponível. Escolha novamente.");
         }
@@ -390,6 +393,13 @@ public class MainActivity extends Activity {
         return uri != null && !uri.isEmpty();
     }
 
+    private void setCycleButtonState(boolean active) {
+        if (cycleButton == null) return;
+        cycleButton.setText(active ? "●  LIGADO" : "●  DESLIGADO");
+        cycleButton.setTextColor(active ? Color.rgb(255, 215, 0) : MUTED);
+        cycleButton.setBackground(round(active ? Color.rgb(42, 35, 8) : PANEL, 20));
+    }
+
     private void toggleCycle() {
         if (cycleActive) {
             stopCycle();
@@ -401,14 +411,14 @@ public class MainActivity extends Activity {
             return;
         }
         cycleActive = true;
-        if (cycleButton != null) cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
+        setCycleButtonState(true);
         status.setText("Automático ativo • aguardando programação");
         sendPlaybackCommand(PlaybackService.ACTION_AUTO_START, true);
     }
 
     private void stopCycle() {
         cycleActive = false;
-        if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
+        setCycleButtonState(false);
         sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
     }
 
