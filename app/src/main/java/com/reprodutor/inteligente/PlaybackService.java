@@ -45,6 +45,8 @@ public class PlaybackService extends Service {
     private long nextCycleChangeAt = 0L;
     private AudioManager audioManager;
     private AudioManager.OnAudioFocusChangeListener focusListener;
+    private AudioFocusRequest focusRequest;
+    private boolean resumeAfterFocusGain = false;
 
     private final Runnable scheduleTick = new Runnable() {
         @Override public void run() {
@@ -88,9 +90,15 @@ public class PlaybackService extends Service {
         super.onCreate();
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         focusListener = change -> {
-            if (change == AudioManager.AUDIOFOCUS_LOSS
-                    || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                pausePlayer();
+            if (change == AudioManager.AUDIOFOCUS_LOSS) {
+                resumeAfterFocusGain = false;
+                pausePlayer(false);
+            } else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                resumeAfterFocusGain = player != null && playerReady && player.isPlaying();
+                pausePlayer(false);
+            } else if (change == AudioManager.AUDIOFOCUS_GAIN && resumeAfterFocusGain) {
+                resumeAfterFocusGain = false;
+                if (manualPlaying || (autoActive && autoPlaying)) startPlayer();
             }
         };
         createNotificationChannel();
@@ -249,17 +257,29 @@ public class PlaybackService extends Service {
         if (player == null || !playerReady) return;
         try {
             if (audioManager != null) {
+                int focusResult;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    AudioAttributes attrs = new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
-                    AudioFocusRequest request = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                            .setAudioAttributes(attrs).setOnAudioFocusChangeListener(focusListener).build();
-                    audioManager.requestAudioFocus(request);
+                    if (focusRequest == null) {
+                        AudioAttributes attrs = new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
+                        focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                                .setAudioAttributes(attrs)
+                                .setOnAudioFocusChangeListener(focusListener)
+                                .setWillPauseWhenDucked(true)
+                                .build();
+                    }
+                    focusResult = audioManager.requestAudioFocus(focusRequest);
                 } else {
-                    audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+                    focusResult = audioManager.requestAudioFocus(
+                            focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+                }
+                if (focusResult != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    resumeAfterFocusGain = focusResult == AudioManager.AUDIOFOCUS_REQUEST_DELAYED;
+                    return;
                 }
             }
+            resumeAfterFocusGain = false;
             if (!player.isPlaying()) player.start();
             if (!autoActive) manualPlaying = true;
             persistPlaybackState();
@@ -268,8 +288,23 @@ public class PlaybackService extends Service {
     }
 
     private void pausePlayer() {
+        pausePlayer(true);
+    }
+
+    private void pausePlayer(boolean abandonFocus) {
         if (player != null && playerReady) {
             try { if (player.isPlaying()) player.pause(); } catch (Exception ignored) { }
+        }
+        if (abandonFocus && audioManager != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
+                    audioManager.abandonAudioFocusRequest(focusRequest);
+                    focusRequest = null;
+                } else {
+                    audioManager.abandonAudioFocus(focusListener);
+                }
+            } catch (Exception ignored) { }
+            resumeAfterFocusGain = false;
         }
     }
 
