@@ -41,6 +41,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private boolean cycleActive = false;
     private Button cycleButton;
+    private Button playButton;
     private TextView status;
     private TextView selectedFile;
     private static final int PICK_AUDIO = 10;
@@ -173,6 +174,18 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(dp(132), dp(38));
         autoHeader.addView(cycleButton, toggleParams);
         page.addView(autoHeader);
+
+        playButton = makeButton("▶  PLAY", PANEL, MUTED, v -> {
+            if (!cycleActive) {
+                Toast.makeText(this, "Ligue o automático primeiro", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            sendPlaybackCommand(PlaybackService.ACTION_MANUAL_PLAY, false);
+            status.setText("Reprodução iniciada manualmente • automático ativo");
+        });
+        LinearLayout.LayoutParams playParams = match();
+        playParams.topMargin = dp(6);
+        page.addView(playButton, playParams);
 
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
@@ -398,6 +411,12 @@ public class MainActivity extends Activity {
         cycleButton.setText(active ? "●  LIGADO" : "●  DESLIGADO");
         cycleButton.setTextColor(active ? Color.rgb(255, 215, 0) : MUTED);
         cycleButton.setBackground(round(active ? Color.rgb(42, 35, 8) : PANEL, 20));
+        if (playButton != null) {
+            playButton.setEnabled(active);
+            playButton.setTextColor(active ? WHITE : MUTED);
+            playButton.setBackground(round(active ? Color.rgb(42, 35, 8) : PANEL, 16));
+            playButton.setAlpha(active ? 1f : 0.45f);
+        }
     }
 
     private void toggleCycle() {
