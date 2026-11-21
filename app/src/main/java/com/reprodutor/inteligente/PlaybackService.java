@@ -225,6 +225,9 @@ public class PlaybackService extends Service {
     }
 
     private void startPlayer() {
+        // Bloqueio absoluto: somente o agendador automático pode autorizar áudio.
+        // Carregar/selecionar/restaurar um arquivo nunca inicia a reprodução.
+        if (!autoActive || !autoPlaying) return;
         if (player == null || !playerReady) return;
         try {
             if (audioManager != null) {
