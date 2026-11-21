@@ -267,6 +267,7 @@ public class MainActivity extends Activity {
         footer.setPadding(0, dp(28), 0, 0);
         page.addView(footer);
         setContentView(scroll);
+        restoreSavedAudio();
     }
 
     private String displayAmPm(String value) {
@@ -410,48 +411,73 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == PICK_AUDIO && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
-            try {
-                if (uri == null) return;
-                try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-                catch (Exception ignored) { }
-                stopCycle();
-                releaseEqualizer();
-                releasePlayer();
-                playerReady = false;
-                player = new MediaPlayer();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    AudioAttributes playbackAttributes = new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .build();
-                    player.setAudioAttributes(playbackAttributes);
-                }
-                player.setLooping(true);
-                player.setWakeMode(this, android.os.PowerManager.PARTIAL_WAKE_LOCK);
-                player.setDataSource(this, uri);
-                player.setOnPreparedListener(mp -> {
-                    playerReady = true;
-                    initializeEqualizer(mp.getAudioSessionId());
-                    applyPitch(getSharedPreferences("programacao", MODE_PRIVATE).getInt("tonalidade", 50));
-                    status.setText("Áudio carregado. Pronto para reproduzir.");
-                    selectedFile.setText("♫  " + uri.getLastPathSegment());
-                });
-                player.setOnCompletionListener(mp -> {
-                    if (cycleActive && cyclePlaying) {
-                        try { mp.seekTo(0); startPlayerWithFocus(); } catch (Exception ignored) { }
-                    } else status.setText("Reprodução concluída");
-                });
-                player.setOnErrorListener((mp, what, extra) -> {
-                    status.setText("Não foi possível reproduzir este áudio");
-                    return true;
-                });
-                status.setText("Carregando áudio...");
-                player.prepareAsync();
-            } catch (Exception e) {
-                releasePlayer();
-                status.setText("Erro ao abrir áudio");
-                Toast.makeText(this, "Não foi possível abrir esse arquivo", Toast.LENGTH_SHORT).show();
+            if (uri != null) {
+                try {
+                    getContentResolver().takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) { }
+                getSharedPreferences("programacao", MODE_PRIVATE).edit()
+                        .putString("audio_uri", uri.toString())
+                        .apply();
+                loadAudio(uri);
             }
+        }
+    }
+
+    // Restaura o arquivo escolhido anteriormente usando a permissão persistente
+    // concedida pelo seletor de documentos do Android.
+    private void restoreSavedAudio() {
+        String saved = getSharedPreferences("programacao", MODE_PRIVATE)
+                .getString("audio_uri", null);
+        if (saved == null || saved.isEmpty()) return;
+        try {
+            loadAudio(Uri.parse(saved));
+        } catch (Exception e) {
+            status.setText("O áudio salvo não está mais disponível. Escolha novamente.");
+        }
+    }
+
+    private void loadAudio(Uri uri) {
+        try {
+            stopCycle();
+            releaseEqualizer();
+            releasePlayer();
+            playerReady = false;
+            player = new MediaPlayer();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                AudioAttributes playbackAttributes = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build();
+                player.setAudioAttributes(playbackAttributes);
+            }
+            player.setLooping(true);
+            player.setWakeMode(this, android.os.PowerManager.PARTIAL_WAKE_LOCK);
+            player.setDataSource(this, uri);
+            player.setOnPreparedListener(mp -> {
+                playerReady = true;
+                initializeEqualizer(mp.getAudioSessionId());
+                applyPitch(getSharedPreferences("programacao", MODE_PRIVATE)
+                        .getInt("tonalidade", 50));
+                status.setText("Áudio salvo e carregado. Pronto para reproduzir.");
+                selectedFile.setText("♫  " + uri.getLastPathSegment());
+            });
+            player.setOnCompletionListener(mp -> {
+                if (cycleActive && cyclePlaying) {
+                    try { mp.seekTo(0); startPlayerWithFocus(); }
+                    catch (Exception ignored) { }
+                } else status.setText("Reprodução concluída");
+            });
+            player.setOnErrorListener((mp, what, extra) -> {
+                status.setText("Não foi possível reproduzir este áudio");
+                return true;
+            });
+            status.setText("Carregando áudio salvo...");
+            player.prepareAsync();
+        } catch (Exception e) {
+            releasePlayer();
+            status.setText("Erro ao abrir áudio salvo. Escolha o arquivo novamente.");
+            Toast.makeText(this, "Não foi possível abrir esse arquivo", Toast.LENGTH_SHORT).show();
         }
     }
 
