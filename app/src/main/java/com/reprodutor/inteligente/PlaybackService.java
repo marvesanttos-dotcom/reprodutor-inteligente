@@ -24,6 +24,7 @@ public class PlaybackService extends Service {
     public static final String ACTION_LOAD = "com.reprodutor.inteligente.LOAD";
     public static final String ACTION_STOP = "com.reprodutor.inteligente.STOP";
     public static final String ACTION_AUTO_START = "com.reprodutor.inteligente.AUTO_START";
+    public static final String ACTION_MANUAL_PLAY = "com.reprodutor.inteligente.MANUAL_PLAY";
     public static final String ACTION_AUTO_STOP = "com.reprodutor.inteligente.AUTO_STOP";
     public static final String ACTION_SET_PITCH = "com.reprodutor.inteligente.SET_PITCH";
     public static final String EXTRA_PITCH = "pitch";
@@ -38,6 +39,7 @@ public class PlaybackService extends Service {
     private boolean autoActive = false;
     private boolean autoPlaying = false;
     private boolean scheduleWindowActive = false;
+    private boolean manualOverride = false;
     private long nextCycleChangeAt = 0L;
     private AudioManager audioManager;
     private AudioManager.OnAudioFocusChangeListener focusListener;
@@ -48,6 +50,12 @@ public class PlaybackService extends Service {
         @Override public void run() {
             if (!autoActive) return;
             if (!playerReady || player == null) {
+                handler.postDelayed(this, 1000L);
+                return;
+            }
+            if (manualOverride) {
+                if (!autoPlaying) autoPlaying = true;
+                if (!player.isPlaying()) startPlayer();
                 handler.postDelayed(this, 1000L);
                 return;
             }
@@ -136,12 +144,20 @@ public class PlaybackService extends Service {
                 stopForegroundCompat();
                 if (!uri.equals(currentUri) || player == null) loadAudio(uri, false);
             }
+        } else if (ACTION_MANUAL_PLAY.equals(action)) {
+            if (autoActive && player != null && playerReady) {
+                manualOverride = true;
+                autoPlaying = true;
+                startPlayer();
+                updateNotification("Automático ativo • reprodução manual");
+            }
         } else if (ACTION_STOP.equals(action) || ACTION_AUTO_STOP.equals(action)) {
             // PARAR cancela também a programação automática para impedir que
             // o ciclo volte a iniciar o áudio logo após o comando de parada.
             autoActive = false;
             autoPlaying = false;
             scheduleWindowActive = false;
+            manualOverride = false;
             handler.removeCallbacks(scheduleTick);
             getSharedPreferences("programacao", MODE_PRIVATE).edit()
                     .putBoolean("auto_active", false)
@@ -157,6 +173,7 @@ public class PlaybackService extends Service {
             autoActive = true;
             autoPlaying = false;
             scheduleWindowActive = false;
+            manualOverride = false;
             nextCycleChangeAt = 0L;
             getSharedPreferences("programacao", MODE_PRIVATE).edit()
                     .putBoolean("auto_active", true).apply();
