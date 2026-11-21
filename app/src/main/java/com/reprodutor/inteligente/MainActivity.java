@@ -363,7 +363,7 @@ public class MainActivity extends Activity {
                 .getString("audio_uri", null);
         if (saved == null || saved.isEmpty()) return;
         try {
-            loadAudio(Uri.parse(saved), true);
+            loadAudio(Uri.parse(saved), false);
         } catch (Exception e) {
             status.setText("O áudio salvo não está mais disponível. Escolha novamente.");
         }
