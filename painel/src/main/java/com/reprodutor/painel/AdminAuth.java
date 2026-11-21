@@ -21,7 +21,7 @@ final class AdminAuth {
     static boolean configured(Context c) { return c.getSharedPreferences(PREF,0).contains("hash"); }
     static boolean verify(Context c,String password) {
         try {
-            var p=c.getSharedPreferences(PREF,0);
+            android.content.SharedPreferences p=c.getSharedPreferences(PREF,0);
             byte[] salt=Base64.decode(p.getString("salt",""),2);
             byte[] expected=Base64.decode(p.getString("hash",""),2);
             PBEKeySpec spec=new PBEKeySpec(password.toCharArray(),salt,210000,256);
