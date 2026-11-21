@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "ReprodutorInteligente"
-include(":app")
+include(":app", ":painel")

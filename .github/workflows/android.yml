@@ -1,8 +1,10 @@
-name: Gerar APK Android
+name: Gerar APKs Android
 
 on:
   workflow_dispatch:
   push:
+    branches: [ "main", "implementacao-painel-ativacao" ]
+  pull_request:
     branches: [ "main" ]
 
 jobs:
@@ -20,10 +22,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Compilar APK
+      - name: Compilar APKs
         run: gradle assembleDebug
-      - name: Guardar APK
+      - name: Guardar APK do reprodutor
         uses: actions/upload-artifact@v4
         with:
           name: ReprodutorInteligente-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Guardar APK do painel
+        uses: actions/upload-artifact@v4
+        with:
+          name: PainelAtivacao-debug
+          path: painel/build/outputs/apk/debug/painel-debug.apk
