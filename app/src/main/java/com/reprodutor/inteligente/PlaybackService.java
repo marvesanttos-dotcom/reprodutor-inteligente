@@ -109,9 +109,11 @@ public class PlaybackService extends Service {
         if (ACTION_LOAD.equals(action)) {
             Uri uri = intent.getData();
             boolean restoring = intent.getBooleanExtra(EXTRA_RESTORE, false);
-            if (uri != null && currentUri == null && restoring) {
+            if (uri != null && restoring && currentUri == null) {
                 SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
                 autoActive = prefs.getBoolean("auto_active", false);
+                autoPlaying = false;
+                scheduleWindowActive = false;
                 if (autoActive) {
                     startForeground(NOTIFICATION_ID, buildNotification("Restaurando programação automática"));
                 }
@@ -120,18 +122,19 @@ public class PlaybackService extends Service {
                     handler.removeCallbacks(scheduleTick);
                     handler.post(scheduleTick);
                 }
-            } else if (uri != null && !uri.equals(currentUri)) {
+            } else if (uri != null) {
+                // Selecionar/trocar arquivo nunca mantém o automático ligado.
                 autoActive = false;
                 autoPlaying = false;
                 scheduleWindowActive = false;
                 handler.removeCallbacks(scheduleTick);
                 getSharedPreferences("programacao", MODE_PRIVATE).edit()
-                        .putBoolean("auto_active", false).putBoolean("manual_playing", false).apply();
+                        .putBoolean("auto_active", false)
+                        .putBoolean("manual_playing", false)
+                        .apply();
                 pausePlayer();
                 stopForegroundCompat();
-                loadAudio(uri, false);
-            } else if (uri != null && player == null) {
-                loadAudio(uri, false);
+                if (!uri.equals(currentUri) || player == null) loadAudio(uri, false);
             }
         } else if (ACTION_STOP.equals(action) || ACTION_AUTO_STOP.equals(action)) {
             // PARAR cancela também a programação automática para impedir que
