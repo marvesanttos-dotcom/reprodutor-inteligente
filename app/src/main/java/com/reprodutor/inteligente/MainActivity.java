@@ -77,6 +77,8 @@ public class MainActivity extends Activity {
     private boolean scheduleWindowActive = false;
     private long nextCycleChangeAt = 0L;
     private Button cycleButton;
+    private Button playingTimeButton;
+    private Button stoppedTimeButton;
     private final Runnable scheduleTick = new Runnable() {
         @Override public void run() {
             if (!cycleActive) return;
@@ -159,7 +161,10 @@ public class MainActivity extends Activity {
         TextView sub = label("PROFESSOR  •  CANTOS", 11, MUTED, true);
         brandText.addView(title);
         brandText.addView(sub);
-        brand.addView(brandText);
+        brand.addView(brandText, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        Button settingsButton = makeButton("⚙", PANEL, GREEN, v -> showScheduleSettings());
+        settingsButton.setTextSize(25);
+        brand.addView(settingsButton, new LinearLayout.LayoutParams(dp(54), dp(54)));
         page.addView(brand);
 
         TextView section = label("SEU ESTÚDIO DE SONS", 12, MUTED, true);
@@ -211,57 +216,68 @@ public class MainActivity extends Activity {
         audioSettingsParams.topMargin = dp(12);
         page.addView(audioSettings, audioSettingsParams);
 
-        TextView manualTitle = label("CONTROLE MANUAL", 12, MUTED, true);
-        manualTitle.setPadding(0, dp(22), 0, dp(10));
-        page.addView(manualTitle);
-        TextView scheduleTitle = label("PROGRAMAÇÕES AUTOMÁTICAS", 12, MUTED, true);
-        scheduleTitle.setPadding(0, dp(25), 0, dp(10));
-        page.addView(scheduleTitle);
-        LinearLayout scheduleHeader = new LinearLayout(this);
-        scheduleHeader.setOrientation(LinearLayout.HORIZONTAL);
-        scheduleHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView scheduleInfo = label("Configure até 4 horários de funcionamento.", 13, WHITE, false);
-        scheduleHeader.addView(scheduleInfo, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        Button resetSchedules = makeButton("↻", Color.TRANSPARENT, WHITE, v -> confirmResetSchedules());
-        resetSchedules.setTextSize(29);
-        resetSchedules.setBackgroundColor(Color.TRANSPARENT);
-        resetSchedules.setElevation(0);
-        resetSchedules.setPadding(0, 0, 0, 0);
-        scheduleHeader.addView(resetSchedules, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        page.addView(scheduleHeader);
-
-        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-        for (int i = 1; i <= 4; i++) {
-            final int slot = i;
-            String startKey = "inicio" + i;
-            String endKey = "fim" + i;
-            String startValue = prefs.getString(startKey, i == 1 ? prefs.getString("inicio", "Não definido") : "Não definido");
-            String endValue = prefs.getString(endKey, i == 1 ? prefs.getString("fim", "Não definido") : "Não definido");
-            configButtons[(i - 1) * 2] = makeButton("PROGRAMAÇÃO " + i + " • LIGA: " + displayAmPm(startValue), WHITE, BG,
-                    v -> chooseTime("inicio" + slot, "Programação " + slot + " • horário para ligar", configButtons[(slot - 1) * 2]));
-            configButtons[(i - 1) * 2 + 1] = makeButton("PROGRAMAÇÃO " + i + " • DESLIGA: " + displayAmPm(endValue), PANEL, WHITE,
-                    v -> chooseTime("fim" + slot, "Programação " + slot + " • horário para desligar", configButtons[(slot - 1) * 2 + 1]));
-        }
-        for (Button b : configButtons) {
-            LinearLayout.LayoutParams configParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
-            configParams.topMargin = dp(7);
-            page.addView(b, configParams);
-        }
-        Button playingTime = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
-                v -> chooseMinutes("tocando", "Tempo tocando (minutos)", configButtons[0]));
-        page.addView(playingTime, match());
-        Button stoppedTime = makeButton("Ⅱ  TEMPO PARADO: " + prefs.getInt("parado", 5) + " MIN", PANEL, WHITE,
-                v -> chooseMinutes("parado", "Tempo parado (minutos)", configButtons[0]));
-        LinearLayout.LayoutParams stoppedParams = match();
-        stoppedParams.topMargin = dp(7);
-        page.addView(stoppedTime, stoppedParams);
-
         TextView footer = label("MAIS RECURSOS INTELIGENTES EM DESENVOLVIMENTO", 9, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(28), 0, 0);
         page.addView(footer);
         setContentView(scroll);
+    }
+
+    private void showScheduleSettings() {
+        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(16), dp(8), dp(16), dp(16));
+        scroll.addView(content);
+
+        TextView intro = label("Configure até 4 horários de funcionamento.", 13, MUTED, false);
+        intro.setPadding(0, 0, 0, dp(10));
+        content.addView(intro);
+
+        LinearLayout scheduleHeader = new LinearLayout(this);
+        scheduleHeader.setOrientation(LinearLayout.HORIZONTAL);
+        scheduleHeader.setGravity(Gravity.CENTER_VERTICAL);
+        TextView scheduleInfo = label("HORÁRIOS PROGRAMADOS", 12, GREEN, true);
+        scheduleHeader.addView(scheduleInfo, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        Button resetSchedules = makeButton("↻ ZERAR", Color.TRANSPARENT, WHITE, v -> confirmResetSchedules());
+        resetSchedules.setBackground(round(PANEL, 12));
+        scheduleHeader.addView(resetSchedules, new LinearLayout.LayoutParams(dp(104), dp(44)));
+        content.addView(scheduleHeader);
+
+        for (int i = 1; i <= 4; i++) {
+            final int slot = i;
+            String startValue = prefs.getString("inicio" + i, i == 1 ? prefs.getString("inicio", "Não definido") : "Não definido");
+            String endValue = prefs.getString("fim" + i, i == 1 ? prefs.getString("fim", "Não definido") : "Não definido");
+            configButtons[(i - 1) * 2] = makeButton("PROGRAMAÇÃO " + i + " • LIGA: " + displayAmPm(startValue), WHITE, BG,
+                    v -> chooseTime("inicio" + slot, "Programação " + slot + " • horário para ligar", configButtons[(slot - 1) * 2]));
+            configButtons[(i - 1) * 2 + 1] = makeButton("PROGRAMAÇÃO " + i + " • DESLIGA: " + displayAmPm(endValue), PANEL, WHITE,
+                    v -> chooseTime("fim" + slot, "Programação " + slot + " • horário para desligar", configButtons[(slot - 1) * 2 + 1]));
+            for (int index = (i - 1) * 2; index <= (i - 1) * 2 + 1; index++) {
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+                params.topMargin = dp(7);
+                content.addView(configButtons[index], params);
+            }
+        }
+
+        TextView cycleTitle = label("CICLO DE REPRODUÇÃO", 12, GREEN, true);
+        cycleTitle.setPadding(0, dp(22), 0, dp(8));
+        content.addView(cycleTitle);
+        playingTimeButton = makeButton("▶  TEMPO TOCANDO: " + prefs.getInt("tocando", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("tocando", "Tempo tocando (minutos)", playingTimeButton));
+        content.addView(playingTimeButton, match());
+        stoppedTimeButton = makeButton("Ⅱ  TEMPO PARADO: " + prefs.getInt("parado", 5) + " MIN", PANEL, WHITE,
+                v -> chooseMinutes("parado", "Tempo parado (minutos)", stoppedTimeButton));
+        LinearLayout.LayoutParams stoppedParams = match();
+        stoppedParams.topMargin = dp(7);
+        content.addView(stoppedTimeButton, stoppedParams);
+
+        new AlertDialog.Builder(this)
+                .setTitle("⚙  Configurações")
+                .setView(scroll)
+                .setPositiveButton("Fechar", null)
+                .show();
     }
 
     private String displayAmPm(String value) {
@@ -297,7 +313,7 @@ public class MainActivity extends Activity {
                         String label = i % 2 == 0
                                 ? "PROGRAMAÇÃO " + slot + " • LIGA: Não definido"
                                 : "PROGRAMAÇÃO " + slot + " • DESLIGA: Não definido";
-                        configButtons[i].setText(label);
+                        if (configButtons[i] != null) configButtons[i].setText(label);
                     }
                     if (cycleActive) {
                         stopCycle();
