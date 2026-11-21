@@ -33,6 +33,7 @@ public class PlaybackService extends Service {
     private static final int NOTIFICATION_ID = 41;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private MediaPlayer player;
+    private Uri currentUri;
     private boolean playerReady = false;
     private boolean pendingManualPlay = false;
     private boolean manualPlaying = false;
@@ -101,7 +102,21 @@ public class PlaybackService extends Service {
 
         if (ACTION_LOAD.equals(action)) {
             Uri uri = intent.getData();
-            if (uri != null) loadAudio(uri, false);
+            if (uri != null && !uri.equals(currentUri)) {
+                autoActive = false;
+                autoPlaying = false;
+                manualPlaying = false;
+                pendingManualPlay = false;
+                scheduleWindowActive = false;
+                handler.removeCallbacks(scheduleTick);
+                getSharedPreferences("programacao", MODE_PRIVATE).edit()
+                        .putBoolean("auto_active", false).putBoolean("manual_playing", false).apply();
+                pausePlayer();
+                stopForegroundCompat();
+                loadAudio(uri, false);
+            } else if (uri != null && player == null) {
+                loadAudio(uri, false);
+            }
         } else if (ACTION_PLAY.equals(action)) {
             manualPlaying = true;
             pendingManualPlay = true;
@@ -125,6 +140,8 @@ public class PlaybackService extends Service {
             if (!autoActive) stopForegroundCompat();
         } else if (ACTION_AUTO_START.equals(action)) {
             autoActive = true;
+            manualPlaying = false;
+            pendingManualPlay = false;
             autoPlaying = false;
             scheduleWindowActive = false;
             nextCycleChangeAt = 0L;
@@ -178,6 +195,7 @@ public class PlaybackService extends Service {
     }
 
     private void loadAudio(Uri uri, boolean playWhenReady) {
+        currentUri = uri;
         releasePlayer();
         pendingManualPlay = playWhenReady;
         try {
