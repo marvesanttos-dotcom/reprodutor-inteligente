@@ -49,16 +49,7 @@ public class MainActivity extends Activity {
     private final int GREEN = Color.rgb(255, 215, 0);
     private final int WHITE = Color.WHITE;
     private final int MUTED = Color.rgb(190, 190, 190);
-
     private final Button[] configButtons = new Button[8];
-    private TextView status;
-    private TextView selectedFile;
-    private static final int PICK_AUDIO = 10;
-    private final int BG = Color.BLACK;
-    private final int PANEL = Color.rgb(16, 16, 16);
-    private final int GREEN = Color.rgb(255, 215, 0);
-    private final int WHITE = Color.WHITE;
-    private final int MUTED = Color.rgb(190, 190, 190);
 
     @Override
     protected void onCreate(Bundle state) {
@@ -462,56 +453,6 @@ public class MainActivity extends Activity {
         status.setText("Áudio parado");
     }
 
-    private void initializeEqualizer(int audioSessionId) {
-        releaseEqualizer();
-        try {
-            equalizer = new Equalizer(0, audioSessionId);
-            equalizer.setEnabled(true);
-            equalizerMin = equalizer.getBandLevelRange()[0];
-            equalizerMax = equalizer.getBandLevelRange()[1];
-            SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-            applyEqualizer(prefs.getInt("graves", 50), prefs.getInt("agudos", 50));
-        } catch (Exception e) {
-            releaseEqualizer();
-            status.setText("Áudio carregado • equalizador indisponível neste aparelho");
-        }
-    }
-
-    private void applyEqualizer(int bass, int treble) {
-        if (equalizer == null) return;
-        try {
-            short bands = equalizer.getNumberOfBands();
-            if (bands < 1) return;
-
-            // 50% é neutro. Os extremos usam toda a faixa suportada pelo aparelho.
-            int bassLevel = bass >= 50
-                    ? (equalizerMax * (bass - 50)) / 50
-                    : (equalizerMin * (50 - bass)) / 50;
-            int trebleLevel = treble >= 50
-                    ? (equalizerMax * (treble - 50)) / 50
-                    : (equalizerMin * (50 - treble)) / 50;
-
-            for (short band = 0; band < bands; band++) {
-                int centerHz = equalizer.getCenterFreq(band) / 1000;
-                if (centerHz <= 250) {
-                    equalizer.setBandLevel(band, (short) bassLevel);
-                } else if (centerHz >= 4000) {
-                    equalizer.setBandLevel(band, (short) trebleLevel);
-                } else {
-                    equalizer.setBandLevel(band, (short) 0);
-                }
-            }
-        } catch (Exception ignored) { }
-    }
-
-    private void releaseEqualizer() {
-        if (equalizer != null) {
-            try { equalizer.setEnabled(false); } catch (Exception ignored) { }
-            try { equalizer.release(); } catch (Exception ignored) { }
-            equalizer = null;
-        }
-    }
-
     private void applyPitch(int tonalidade) {
         Intent command = new Intent(this, PlaybackService.class);
         command.setAction(PlaybackService.ACTION_SET_PITCH);
@@ -645,19 +586,9 @@ public class MainActivity extends Activity {
         stopService(new Intent(this, PlaybackService.class));
     }
 
-    private void releasePlayer() {
-        playerReady = false;
-        if (player != null) {
-            try { player.stop(); } catch (Exception ignored) { }
-            player.release();
-            player = null;
-        }
-    }
-
     @Override
     protected void onDestroy() {
         // O serviço é dono do MediaPlayer e continua ativo fora da tela.
-        releaseEqualizer();
         super.onDestroy();
     }
 }
