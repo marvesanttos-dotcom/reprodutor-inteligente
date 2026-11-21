@@ -340,6 +340,10 @@ public class MainActivity extends Activity {
         if (requestCode == PICK_AUDIO && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
             if (uri != null) {
+                if (cycleActive) {
+                    cycleActive = false;
+                    if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
+                }
                 try {
                     getContentResolver().takePersistableUriPermission(
                             uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
