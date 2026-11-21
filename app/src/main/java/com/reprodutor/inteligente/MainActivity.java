@@ -88,10 +88,22 @@ public class MainActivity extends Activity {
             long now = SystemClock.elapsedRealtime();
             SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
             if (!inside) {
-                if (player.isPlaying()) { try { player.pause(); } catch (Exception ignored) { } }
+                // Ao sair da janela programada, encerra a reprodução de verdade,
+                // libera o serviço/áudio e deixa o arquivo no início para a próxima janela.
+                if (scheduleWindowActive || cyclePlaying) {
+                    try {
+                        if (player.isPlaying()) player.pause();
+                        player.seekTo(0);
+                    } catch (Exception ignored) { }
+                    stopBackgroundPlayback();
+                    abandonPlaybackAudioFocus();
+                    status.setText("Horário de desligar atingido • aguardando próxima programação");
+                } else {
+                    status.setText("Automático ativo • aguardando próximo horário");
+                }
                 cyclePlaying = false;
                 scheduleWindowActive = false;
-                status.setText("Automático ativo • aguardando próximo horário");
+                nextCycleChangeAt = 0L;
             } else if (!scheduleWindowActive) {
                 scheduleWindowActive = true;
                 cyclePlaying = true;
