@@ -46,6 +46,9 @@ public class MainActivity extends Activity {
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
     private boolean resumeAfterFocusLoss = false;
+    // Declaradas antes do listener para evitar referência antecipada em Java.
+    private boolean cycleActive = false;
+    private boolean cyclePlaying = false;
     private final AudioManager.OnAudioFocusChangeListener audioFocusListener = change -> {
         // Sons breves do sistema/notificações não devem interromper o canto.
         // O Android pode reduzir o volume automaticamente durante o ducking.
@@ -73,8 +76,6 @@ public class MainActivity extends Activity {
     private short equalizerMin = -1500;
     private short equalizerMax = 1500;
     private final Handler cycleHandler = new Handler(Looper.getMainLooper());
-    private boolean cycleActive = false;
-    private boolean cyclePlaying = false;
     private boolean scheduleWindowActive = false;
     private long nextCycleChangeAt = 0L;
     private Button cycleButton;
