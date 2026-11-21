@@ -192,6 +192,8 @@ public class MainActivity extends Activity {
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(28), 0, 0);
         page.addView(footer);
+        cycleActive = prefs.getBoolean("auto_active", false);
+        if (cycleActive) cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
         setContentView(scroll);
         restoreSavedAudio();
     }
