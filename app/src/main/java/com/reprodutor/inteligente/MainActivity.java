@@ -38,6 +38,7 @@ import android.widget.Toast;
 import android.content.SharedPreferences;
 import java.util.Locale;
 
+// Player com comandos de programação: iniciar, pausar e parar.
 public class MainActivity extends Activity {
     private MediaPlayer player;
     private boolean playerReady = false;
