@@ -39,92 +39,17 @@ import android.content.SharedPreferences;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private MediaPlayer player;
-    private boolean playerReady = false;
-    // A reprodução manual só é autorizada pelo botão REPRODUZIR.
-    private boolean manualPlaybackRequested = false;
-    private AudioManager audioManager;
-    private AudioFocusRequest audioFocusRequest;
-    private boolean resumeAfterFocusLoss = false;
-    // Declaradas antes do listener para evitar referência antecipada em Java.
     private boolean cycleActive = false;
-    private boolean cyclePlaying = false;
-    private final AudioManager.OnAudioFocusChangeListener audioFocusListener = change -> {
-        // Sons breves do sistema/notificações não devem interromper o canto.
-        // O Android pode reduzir o volume automaticamente durante o ducking.
-        if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK
-                || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-            return;
-        }
-        if (change == AudioManager.AUDIOFOCUS_GAIN) {
-            if (resumeAfterFocusLoss && player != null && playerReady
-                    && (manualPlaybackRequested || (cycleActive && cyclePlaying))) {
-                try {
-                    if (!player.isPlaying()) player.start();
-                    startBackgroundPlayback();
-                } catch (Exception ignored) { }
-            }
-            resumeAfterFocusLoss = false;
-        } else if (change == AudioManager.AUDIOFOCUS_LOSS) {
-            resumeAfterFocusLoss = false;
-            if (player != null && playerReady && player.isPlaying()) {
-                try { player.pause(); } catch (Exception ignored) { }
-            }
-        }
-    };
-    private Equalizer equalizer;
-    private short equalizerMin = -1500;
-    private short equalizerMax = 1500;
-    private final Handler cycleHandler = new Handler(Looper.getMainLooper());
-    private boolean scheduleWindowActive = false;
-    private long nextCycleChangeAt = 0L;
     private Button cycleButton;
-    private final Runnable scheduleTick = new Runnable() {
-        @Override public void run() {
-            if (!cycleActive) return;
-            if (player == null || !playerReady) { stopCycle(); return; }
-            boolean inside = isWithinAnySchedule();
-            long now = SystemClock.elapsedRealtime();
-            SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-            if (!inside) {
-                if (player.isPlaying()) { try { player.pause(); } catch (Exception ignored) { } }
-                cyclePlaying = false;
-                scheduleWindowActive = false;
-                status.setText("Automático ativo • aguardando próximo horário");
-            } else if (!scheduleWindowActive) {
-                scheduleWindowActive = true;
-                cyclePlaying = true;
-                try {
-                    if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
-                    startPlayerWithFocus();
-                    nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
-                    status.setText("Programação ativa • reproduzindo");
-                } catch (Exception e) { stopCycle(); status.setText("Não foi possível iniciar o áudio"); return; }
-            } else if (now >= nextCycleChangeAt) {
-                if (cyclePlaying) {
-                    try { if (player.isPlaying()) player.pause(); } catch (Exception ignored) { }
-                    cyclePlaying = false;
-                    nextCycleChangeAt = now + prefs.getInt("parado", 5) * 60L * 1000L;
-                    status.setText("Programação ativa • intervalo de pausa");
-                } else {
-                    try {
-                        if (player.getCurrentPosition() >= player.getDuration()) player.seekTo(0);
-                        // Autoriza o ciclo antes de chamar o método central de início.
-                        cyclePlaying = true;
-                        startPlayerWithFocus();
-                        nextCycleChangeAt = now + prefs.getInt("tocando", 5) * 60L * 1000L;
-                        status.setText("Programação ativa • reproduzindo");
-                    } catch (Exception e) {
-                        cyclePlaying = false;
-                        stopCycle();
-                        status.setText("Não foi possível iniciar o áudio");
-                        return;
-                    }
-                }
-            }
-            cycleHandler.postDelayed(this, 1000L);
-        }
-    };
+    private TextView status;
+    private TextView selectedFile;
+    private static final int PICK_AUDIO = 10;
+    private final int BG = Color.BLACK;
+    private final int PANEL = Color.rgb(16, 16, 16);
+    private final int GREEN = Color.rgb(255, 215, 0);
+    private final int WHITE = Color.WHITE;
+    private final int MUTED = Color.rgb(190, 190, 190);
+
     private final Button[] configButtons = new Button[8];
     private TextView status;
     private TextView selectedFile;
@@ -448,89 +373,37 @@ public class MainActivity extends Activity {
     }
 
     private void loadAudio(Uri uri) {
+        // A seleção apenas prepara e guarda o áudio. Nunca envia comando PLAY.
         try {
-            // Carregar ou restaurar um arquivo nunca autoriza reprodução.
-            manualPlaybackRequested = false;
-            stopCycle();
-            // Encerra qualquer reprodução/serviço anterior antes de carregar outro arquivo.
-            stopBackgroundPlayback();
-            abandonPlaybackAudioFocus();
-            releaseEqualizer();
-            releasePlayer();
-            playerReady = false;
-            player = new MediaPlayer();
-            // Trava de segurança: o áudio permanece mudo até um comando explícito de tocar.
-            player.setVolume(0f, 0f);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                AudioAttributes playbackAttributes = new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build();
-                player.setAudioAttributes(playbackAttributes);
-            }
-            player.setLooping(true);
-            player.setWakeMode(this, android.os.PowerManager.PARTIAL_WAKE_LOCK);
-            player.setDataSource(this, uri);
-            player.setOnPreparedListener(mp -> {
-                // Selecionar ou restaurar um arquivo nunca deve iniciar a reprodução.
-                // O áudio só começa quando o usuário toca em REPRODUZIR ou inicia o ciclo.
-                try {
-                    if (mp.isPlaying()) mp.pause();
-                    mp.seekTo(0);
-                    // Mesmo que algum caminho inesperado tente iniciar o player, não haverá som.
-                    mp.setVolume(0f, 0f);
-                } catch (Exception ignored) { }
-                // Defesa extra: se algum caminho externo iniciar o player durante o
-                // carregamento, interrompe imediatamente e não mantém serviço ativo.
-                if (!manualPlaybackRequested && !cycleActive) {
-                    try { if (mp.isPlaying()) mp.pause(); } catch (Exception ignored) { }
-                    stopBackgroundPlayback();
-                }
-                playerReady = true;
-                initializeEqualizer(mp.getAudioSessionId());
-                applyPitch(getSharedPreferences("programacao", MODE_PRIVATE)
-                        .getInt("tonalidade", 50));
-                status.setText("Áudio carregado • toque em REPRODUZIR para começar.");
-                selectedFile.setText("♫  " + uri.getLastPathSegment());
-            });
-            player.setOnCompletionListener(mp -> {
-                if (cycleActive && cyclePlaying) {
-                    try { mp.seekTo(0); startPlayerWithFocus(); }
-                    catch (Exception ignored) { }
-                } else status.setText("Reprodução concluída");
-            });
-            player.setOnErrorListener((mp, what, extra) -> {
-                status.setText("Não foi possível reproduzir este áudio");
-                return true;
-            });
-            status.setText("Carregando áudio salvo...");
-            player.prepareAsync();
+            Intent command = new Intent(this, PlaybackService.class);
+            command.setAction(PlaybackService.ACTION_LOAD);
+            command.setData(uri);
+            startService(command);
+            status.setText("Áudio selecionado • toque em REPRODUZIR para começar.");
+            selectedFile.setText("♫  " + uri.getLastPathSegment());
         } catch (Exception e) {
-            releasePlayer();
-            status.setText("Erro ao abrir áudio salvo. Escolha o arquivo novamente.");
-            Toast.makeText(this, "Não foi possível abrir esse arquivo", Toast.LENGTH_SHORT).show();
+            status.setText("Não foi possível carregar o áudio selecionado.");
+            Toast.makeText(this, "Erro ao carregar áudio", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private boolean isWithinAnySchedule() {
-        Calendar cal = Calendar.getInstance();
-        int current = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
-        SharedPreferences prefs = getSharedPreferences("programacao", MODE_PRIVATE);
-        for (int i = 1; i <= 4; i++) {
-            String start = prefs.getString("inicio" + i, i == 1 ? prefs.getString("inicio", "Não definido") : "Não definido");
-            String end = prefs.getString("fim" + i, i == 1 ? prefs.getString("fim", "Não definido") : "Não definido");
-            if (start.equals("Não definido") || end.equals("Não definido")) continue;
-            try {
-                String[] a = start.split(":");
-                String[] b = end.split(":");
-                int from = Integer.parseInt(a[0]) * 60 + Integer.parseInt(a[1]);
-                int to = Integer.parseInt(b[0]) * 60 + Integer.parseInt(b[1]);
-                if (from == to) continue;
-                boolean active = from < to ? current >= from && current < to : current >= from || current < to;
-                if (active) return true;
-            } catch (Exception ignored) { }
+    private void sendPlaybackCommand(String action, boolean foreground) {
+        Intent command = new Intent(this, PlaybackService.class);
+        command.setAction(action);
+        try {
+            if (foreground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(command);
+            } else {
+                startService(command);
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível executar o comando de áudio", Toast.LENGTH_SHORT).show();
         }
-        return false;
+    }
+
+    private boolean hasSavedAudio() {
+        String uri = getSharedPreferences("programacao", MODE_PRIVATE).getString("audio_uri", null);
+        return uri != null && !uri.isEmpty();
     }
 
     private void toggleCycle() {
@@ -539,117 +412,54 @@ public class MainActivity extends Activity {
             status.setText("Ciclo automático parado");
             return;
         }
-        if (player == null || !playerReady) {
-            Toast.makeText(this, "Escolha um áudio e aguarde carregar", Toast.LENGTH_SHORT).show();
+        if (!hasSavedAudio()) {
+            Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
             return;
         }
         cycleActive = true;
-        cyclePlaying = false;
-        cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
-        scheduleWindowActive = false;
-        nextCycleChangeAt = 0L;
-        cycleHandler.removeCallbacks(scheduleTick);
+        if (cycleButton != null) cycleButton.setText("■  PARAR CICLO AUTOMÁTICO");
         status.setText("Automático ativo • aguardando programação");
-        scheduleTick.run();
+        sendPlaybackCommand(PlaybackService.ACTION_AUTO_START, true);
     }
 
     private void stopCycle() {
         cycleActive = false;
-        cyclePlaying = false;
-        cycleHandler.removeCallbacks(scheduleTick);
-        scheduleWindowActive = false;
         if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
-    }
-
-    private void requestPlaybackAudioFocus() {
-        if (audioManager == null) audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
-        if (audioManager == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (audioFocusRequest == null) {
-                AudioAttributes attributes = new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build();
-                audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                        .setAudioAttributes(attributes)
-                        .setAcceptsDelayedFocusGain(true)
-                        .setWillPauseWhenDucked(false)
-                        .setOnAudioFocusChangeListener(audioFocusListener)
-                        .build();
-            }
-            audioManager.requestAudioFocus(audioFocusRequest);
-        } else {
-            audioManager.requestAudioFocus(audioFocusListener, AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN);
-        }
-    }
-
-    private void abandonPlaybackAudioFocus() {
-        resumeAfterFocusLoss = false;
-        if (audioManager == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && audioFocusRequest != null) {
-            audioManager.abandonAudioFocusRequest(audioFocusRequest);
-        } else {
-            audioManager.abandonAudioFocus(audioFocusListener);
-        }
-    }
-
-    private void startPlayerWithFocus() {
-        if (!manualPlaybackRequested && !(cycleActive && cyclePlaying)) {
-            throw new IllegalStateException("Reprodução não autorizada: use REPRODUZIR ou inicie o ciclo automático.");
-        }
-        // O volume só é liberado depois de confirmar autorização manual ou automática.
-        player.setVolume(1f, 1f);
-        requestPlaybackAudioFocus();
-        player.start();
-        startBackgroundPlayback();
+        sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
     }
 
     private void playAudio() {
-        if (cycleActive) {
-            stopCycle();
-            status.setText("Modo manual");
-        }
-        if (player == null) {
+        if (!hasSavedAudio()) {
             Toast.makeText(this, "Escolha um áudio primeiro", Toast.LENGTH_SHORT).show();
             return;
         }
-        try {
-            manualPlaybackRequested = true;
-            startPlayerWithFocus();
-            status.setText("Reproduzindo áudio");
-        } catch (IllegalStateException e) {
-            manualPlaybackRequested = false;
-            status.setText("Aguarde o áudio carregar e tente novamente");
+        if (cycleActive) {
+            cycleActive = false;
+            if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
+            sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
         }
+        sendPlaybackCommand(PlaybackService.ACTION_PLAY, true);
+        status.setText("Comando de reprodução enviado");
     }
 
     private void pauseAudio() {
-        manualPlaybackRequested = false;
         if (cycleActive) {
-            stopCycle();
-            status.setText("Modo manual");
+            cycleActive = false;
+            if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
+            sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
         }
-        if (player != null && player.isPlaying()) {
-            player.pause();
-            stopBackgroundPlayback();
-            abandonPlaybackAudioFocus();
-            status.setText("Áudio pausado");
-        } else status.setText("Nenhum áudio está tocando");
+        sendPlaybackCommand(PlaybackService.ACTION_PAUSE, false);
+        status.setText("Áudio pausado");
     }
 
     private void stopAudio() {
-        manualPlaybackRequested = false;
-        stopCycle();
-        if (player != null) {
-            try {
-                if (player.isPlaying()) player.pause();
-                stopBackgroundPlayback();
-                abandonPlaybackAudioFocus();
-                player.seekTo(0);
-                status.setText("Áudio parado");
-            } catch (IllegalStateException e) { status.setText("Selecione o áudio novamente"); }
-        } else status.setText("Escolha um áudio primeiro");
+        if (cycleActive) {
+            cycleActive = false;
+            if (cycleButton != null) cycleButton.setText("▶  INICIAR CICLO AUTOMÁTICO");
+        }
+        sendPlaybackCommand(PlaybackService.ACTION_STOP, false);
+        sendPlaybackCommand(PlaybackService.ACTION_AUTO_STOP, false);
+        status.setText("Áudio parado");
     }
 
     private void initializeEqualizer(int audioSessionId) {
@@ -703,19 +513,10 @@ public class MainActivity extends Activity {
     }
 
     private void applyPitch(int tonalidade) {
-        if (player == null || !playerReady) return;
-        try {
-            // 50% mantém o tom original; pitch muda sem alterar a velocidade.
-            float pitch = tonalidade < 50
-                    ? 0.5f + (tonalidade / 50f) * 0.5f
-                    : 1.0f + ((tonalidade - 50) / 50f);
-            PlaybackParams params = new PlaybackParams();
-            params.setSpeed(1.0f);
-            params.setPitch(pitch);
-            player.setPlaybackParams(params);
-        } catch (Exception e) {
-            Toast.makeText(this, "Este aparelho não permite alterar o tom mantendo a velocidade.", Toast.LENGTH_LONG).show();
-        }
+        Intent command = new Intent(this, PlaybackService.class);
+        command.setAction(PlaybackService.ACTION_SET_PITCH);
+        command.putExtra(PlaybackService.EXTRA_PITCH, tonalidade);
+        try { startService(command); } catch (Exception ignored) { }
     }
 
     private void showAudioSettings() {
@@ -855,11 +656,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        stopCycle();
-        stopBackgroundPlayback();
-        abandonPlaybackAudioFocus();
+        // O serviço é dono do MediaPlayer e continua ativo fora da tela.
         releaseEqualizer();
-        releasePlayer();
         super.onDestroy();
     }
 }
