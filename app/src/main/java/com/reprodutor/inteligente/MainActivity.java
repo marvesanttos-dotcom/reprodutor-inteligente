@@ -477,9 +477,12 @@ public class MainActivity extends Activity {
         }
         if (cycleActive && cyclePaused) {
             cyclePaused = false;
+            cyclePlaying = false;
+            scheduleWindowActive = false;
+            nextCycleChangeAt = 0L;
             cycleHandler.removeCallbacks(scheduleTick);
-            status.setText("Programação retomada");
-            if (cycleButton != null) cycleButton.setText("▶  EM EXECUÇÃO");
+            status.setText("Programação retomada • verificando horário");
+            if (cycleButton != null) cycleButton.setText("▶  INICIAR");
             scheduleTick.run();
             return;
         }
